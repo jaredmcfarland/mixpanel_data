@@ -167,11 +167,11 @@ def _build_start_envelope(start: accounts_ns.LoginStartResult) -> dict[str, Any]
     }
 
 
-def _build_finish_envelope(result: accounts_ns._PublishResult) -> dict[str, Any]:
+def _build_finish_envelope(result: accounts_ns.LoginFinishResult) -> dict[str, Any]:
     """Build the ``state: ok`` envelope for ``--finish`` / ``--resume``.
 
     Args:
-        result: :class:`accounts._PublishResult` from
+        result: :class:`accounts.LoginFinishResult` from
             :func:`accounts.login_unified_finish` or
             :func:`accounts.login_unified_resume`.
 
@@ -292,13 +292,32 @@ def _emit_json(payload: dict[str, Any]) -> None:
     """Print ``payload`` as a single line of compact JSON to stdout.
 
     Single-line so the slash command's ``json.loads(stdout)`` works
-    without scanning for object boundaries. ``default=str`` lets
-    ``datetime`` and ``Path`` instances slip through untouched.
+    without scanning for object boundaries. The encoder explicitly
+    accepts ``datetime`` and :class:`Path` (the only non-JSON-native
+    types intentionally used in the §9 envelopes); anything else
+    raises ``TypeError`` so a future refactor that drops a token, a
+    Pydantic ``SecretStr``, or some other surprise into an envelope
+    fails loudly during testing rather than silently stringifying it.
 
     Args:
         payload: The envelope dict to serialize.
+
+    Raises:
+        TypeError: ``payload`` contains an object whose type is neither
+            JSON-native nor :class:`datetime` / :class:`Path`.
     """
-    print(json.dumps(payload, default=str))
+    from datetime import datetime
+
+    def _encoder(obj: object) -> str:
+        """Stringify the only two non-JSON-native types we permit."""
+        if isinstance(obj, (datetime, Path)):
+            return str(obj)
+        raise TypeError(
+            f"Envelope contains non-serializable {type(obj).__name__}; "
+            f"add explicit handling in _emit_json or pre-serialize the value."
+        )
+
+    print(json.dumps(payload, default=_encoder))
 
 
 def _validate_two_shot_flag_combos(

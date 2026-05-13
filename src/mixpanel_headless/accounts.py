@@ -67,6 +67,7 @@ PickMethod = Literal[
     "explicit",
     "tty_picker",
     "sole_survivor",
+    "sole_survivor_filtered",
     "primary_org_lowest_id",
     "fallback_with_unintegrated",
     "fallback_with_demos",
@@ -80,7 +81,14 @@ from your most-active org" vs "your only active project" vs
 "unintegrated — verify first") so the user can tell whether the choice
 needs a sanity check. Programmatic consumers (the slash command, future
 ``auth_manager.py login_finish`` wrapper) branch on it without parsing
-the human message."""
+the human message.
+
+``sole_survivor`` means the user really has only one region-compatible
+project (the funnel's ``region_compatible_count`` is 1).
+``sole_survivor_filtered`` means there are multiple region-compatible
+projects but only one survived the demo / unintegrated filters — the
+distinction matters for the user-facing message ("your only active
+project" vs "the only non-demo, integrated project")."""
 
 
 @dataclass(frozen=True)
@@ -139,13 +147,16 @@ class ProjectPickResult:
 
 
 @dataclass(frozen=True)
-class _PublishResult:
-    """Internal carrier for ``_publish_account_from_tokens``'s outputs.
+class LoginFinishResult:
+    """Public return type of :func:`login_unified_finish` / :func:`login_unified_resume`.
 
     Bundles the published :class:`AccountSummary` with the
     :class:`ProjectPickResult` so the CLI's ``--finish`` / ``--resume``
     handlers can render the §9 envelope including ``project_pick``
     metadata without re-running ``/me`` or re-deriving the algorithm.
+
+    Also returned by the internal
+    :func:`_publish_account_from_tokens` helper that powers both flows.
 
     Attributes:
         summary: The published account, with ``user_email`` /
@@ -1823,7 +1834,7 @@ def _publish_account_from_tokens(
     auto_pick: bool,
     cached_me: MeResponse | None,
     progress: ProgressFactory,
-) -> _PublishResult:
+) -> LoginFinishResult:
     """Shared post-token tail of the oauth_browser login flows.
 
     Precondition: ``placeholder_dir`` exists, contains ``tokens.json`` matching
@@ -1874,7 +1885,7 @@ def _publish_account_from_tokens(
             round-trip so the CLI's spinner / heartbeat stays active.
 
     Returns:
-        :class:`_PublishResult` carrying the published
+        :class:`LoginFinishResult` carrying the published
         :class:`AccountSummary` plus the :class:`ProjectPickResult` so
         the CLI can render the §9 envelope.
 
@@ -1969,7 +1980,7 @@ def _publish_account_from_tokens(
             default_project=chosen_project,
         )
         _persist_me_cache(final_name, me_resp)
-        return _PublishResult(
+        return LoginFinishResult(
             summary=_summary_with_me(
                 summary, me_resp=me_resp, project_id=chosen_project
             ),
@@ -2031,11 +2042,6 @@ def login_unified_start(
     from mixpanel_headless._internal.auth.storage import OAuthStorage
 
     auth_region: Region = region if region is not None else "us"
-    # Construct OAuthFlow purely to share its bumped-timeout httpx.Client
-    # for the DCR round-trip. The flow itself is not driven — we just
-    # need a client with the correct timeout for the cold SOCKS handshake
-    # that bites every first-time Cowork run.
-    flow = OAuthFlow(region=auth_region, storage=OAuthStorage())
     pkce = PkceChallenge.generate()
     import secrets as _secrets
 
@@ -2043,12 +2049,18 @@ def login_unified_start(
     port = find_available_callback_port()
     redirect_uri = f"http://localhost:{port}/callback"
 
-    client_info = ensure_client_registered(
-        http_client=flow._http_client,  # noqa: SLF001 — intentional internal reuse
-        region=auth_region,
-        redirect_uri=redirect_uri,
-        storage=flow._storage,  # noqa: SLF001
-    )
+    # Construct OAuthFlow purely to share its bumped-timeout httpx.Client
+    # for the DCR round-trip. The flow itself is not driven — we just
+    # need a client with the correct timeout for the cold SOCKS handshake
+    # that bites every first-time Cowork run. The `with` block ensures
+    # the client is closed even if DCR or URL building raises.
+    with OAuthFlow(region=auth_region, storage=OAuthStorage()) as flow:
+        client_info = ensure_client_registered(
+            http_client=flow.http_client,
+            region=auth_region,
+            redirect_uri=redirect_uri,
+            storage=flow.storage,
+        )
 
     base_url = OAUTH_BASE_URLS[auth_region]
     authorize_url = f"{base_url}authorize/?" + urlencode(
@@ -2084,7 +2096,7 @@ def login_unified_finish(
     project: str | None = None,
     project_picker: ProjectPicker | None = None,
     progress: ProgressFactory | None = None,
-) -> _PublishResult:
+) -> LoginFinishResult:
     """Two-shot oauth_browser flow — finish step.
 
     Reads ``~/.mp/oauth/inflight.json``, validates the pasted URL's state
@@ -2092,7 +2104,7 @@ def login_unified_finish(
     writes tokens to a fresh placeholder dir, then delegates to
     :func:`_publish_account_from_tokens` with ``auto_pick=True``.
 
-    On success: clears the inflight file, returns :class:`_PublishResult`
+    On success: clears the inflight file, returns :class:`LoginFinishResult`
     so the CLI can render the §9 envelope. On failure (including
     state mismatch, /me errors, region mismatch, account name collision):
     leaves the inflight in place so the user can retry without re-running
@@ -2109,7 +2121,7 @@ def login_unified_finish(
         progress: CM factory wrapped around the slow ``/me`` call.
 
     Returns:
-        :class:`_PublishResult` for the new account.
+        :class:`LoginFinishResult` for the new account.
 
     Raises:
         OAuthError: ``OAUTH_INFLIGHT_*`` (missing / expired / corrupt
@@ -2138,13 +2150,13 @@ def login_unified_finish(
     inflight = load_inflight()
     cb = _parse_pasted_redirect(pasted_url, expected_state=inflight.state)
 
-    flow = OAuthFlow(region=inflight.region, storage=OAuthStorage())
-    tokens = flow.exchange_code(
-        code=cb.code,
-        verifier=inflight.pkce_verifier,
-        client_id=inflight.client_id,
-        redirect_uri=inflight.redirect_uri,
-    )
+    with OAuthFlow(region=inflight.region, storage=OAuthStorage()) as flow:
+        tokens = flow.exchange_code(
+            code=cb.code,
+            verifier=inflight.pkce_verifier,
+            client_id=inflight.client_id,
+            redirect_uri=inflight.redirect_uri,
+        )
 
     placeholder_dir = new_placeholder_dir(accounts_root())
     atomic_write_bytes(placeholder_dir / "tokens.json", token_payload_bytes(tokens))
@@ -2202,7 +2214,7 @@ def login_unified_resume(
     project: str | None = None,
     project_picker: ProjectPicker | None = None,
     progress: ProgressFactory | None = None,
-) -> _PublishResult:
+) -> LoginFinishResult:
     """Two-shot oauth_browser flow — post-publish-failure recovery.
 
     Reads ``tokens.json`` (and optionally a fresh ``me.json``) from
@@ -2225,12 +2237,16 @@ def login_unified_resume(
         progress: CM factory.
 
     Returns:
-        :class:`_PublishResult` for the recovered account.
+        :class:`LoginFinishResult` for the recovered account.
 
     Raises:
-        ConfigError: ``placeholder_dir`` doesn't look like a placeholder
-            (wrong name pattern) or doesn't contain ``tokens.json``.
-        OAuthError: ``tokens.json`` is malformed.
+        ConfigError: ``placeholder_dir`` is not under
+            :func:`accounts_root`, doesn't look like a placeholder
+            (wrong name pattern), doesn't contain ``tokens.json``, or
+            its ``meta.json`` carries an invalid ``region``.
+        OAuthError: ``tokens.json`` is malformed, or
+            ``meta.json`` exists but is corrupt
+            (``OAUTH_PLACEHOLDER_META_CORRUPT``).
         Plus all the failure modes of :func:`_publish_account_from_tokens`.
     """
     from mixpanel_headless._internal.auth.inflight import (
@@ -2239,11 +2255,23 @@ def login_unified_resume(
         read_placeholder_meta,
         read_tokens_from_placeholder,
     )
+    from mixpanel_headless._internal.auth.storage import accounts_root as _accounts_root
 
     if progress is None:
         progress = lambda _msg: contextlib.nullcontext()  # noqa: E731
 
     placeholder_dir = placeholder_dir.resolve()
+    # Guard against arbitrary on-disk paths. ``--resume`` will rename the
+    # placeholder into ``accounts_root()``; if a caller hands us
+    # ``/tmp/.tmp-foo``, we'd silently exfiltrate whoever's tokens are
+    # sitting there. Keep ``--resume`` strictly under the accounts root.
+    root = _accounts_root().resolve()
+    if not placeholder_dir.is_relative_to(root):
+        raise ConfigError(
+            f"--resume placeholder must live under {root}; got "
+            f"{placeholder_dir}. Pass the path printed by the failed "
+            f"`mp login --finish` invocation."
+        )
     if not placeholder_dir.exists():
         raise ConfigError(f"Placeholder directory {placeholder_dir} does not exist.")
     if not placeholder_dir.name.startswith(".tmp-"):
@@ -2261,13 +2289,26 @@ def login_unified_resume(
     tokens = read_tokens_from_placeholder(placeholder_dir)
 
     # Region detection: prefer the placeholder's meta.json (written at
-    # --finish time); fall back to "us" only as a last-ditch default.
+    # --finish time). ``read_placeholder_meta`` returns ``None`` ONLY
+    # when meta.json is absent (legacy placeholders predating the
+    # meta-writing code) — corrupt / unreadable meta now raises
+    # ``OAUTH_PLACEHOLDER_META_CORRUPT``. The "us" default is therefore
+    # only reached for legacy placeholders, never for a modern EU/IN
+    # placeholder with a busted meta.json (which would otherwise hit
+    # the NeedsRegionSwitchError cleanup path below and destroy
+    # recoverable tokens).
     meta = read_placeholder_meta(placeholder_dir)
     region: Region = "us"
     if meta is not None:
         meta_region = meta.get("region")
         if isinstance(meta_region, str) and meta_region in ("us", "eu", "in"):
             region = meta_region  # type: ignore[assignment]
+        else:
+            raise ConfigError(
+                f"Placeholder {placeholder_dir} has invalid region "
+                f"{meta_region!r} in meta.json. Repair meta.json by hand "
+                f"or re-run `mp login --start --region <us|eu|in>`."
+            )
 
     cached_me = load_cached_me_from_placeholder(placeholder_dir)
 
@@ -2662,11 +2703,28 @@ def _resolve_project(
     # fields are undeclared on MeProjectInfo (live API returns them via
     # model_extra).
     def _is_demo(info: MeProjectInfo) -> bool:
+        """True if ``info`` is a Mixpanel demo project.
+
+        Read from the live ``/me`` payload's ``is_demo`` field via
+        ``model_extra`` (the field is not declared on
+        :class:`MeProjectInfo` so it travels through pydantic's extras).
+        Demo projects are excluded from auto-pick unless every
+        region-compatible project is a demo (the
+        ``fallback_with_demos`` last resort).
+        """
         return bool((info.model_extra or {}).get("is_demo"))
 
     def _is_integrated(info: MeProjectInfo) -> bool:
-        # has_integrated == True means "received events at some point".
-        # Missing or False/None means "abandoned" for auto-pick purposes.
+        """True if ``info`` has received events at some point.
+
+        ``has_integrated == True`` means the project has data;
+        anything else (missing, ``False``, ``None``) means
+        "abandoned / never-shipped" for auto-pick purposes. Same
+        ``model_extra`` story as :func:`_is_demo`. Unintegrated
+        projects are excluded unless every non-demo project is
+        unintegrated (the ``fallback_with_unintegrated`` cascade
+        step).
+        """
         return (info.model_extra or {}).get("has_integrated") is True
 
     no_demos = {pid: info for pid, info in region_compat.items() if not _is_demo(info)}
@@ -2850,7 +2908,9 @@ def _auto_pick_from_filtered(
         org = me_resp.organizations.get(str(primary_org_id))
         return ProjectPickResult(
             project_id=chosen,
-            method="primary_org_lowest_id" if filtered_n > 1 else "sole_survivor",
+            method=(
+                "primary_org_lowest_id" if filtered_n > 1 else "sole_survivor_filtered"
+            ),
             auth_region=region,
             primary_org_id=str(primary_org_id),
             primary_org_name=org.name if org is not None else None,
@@ -2945,6 +3005,7 @@ def _pick_from_primary_org(
 
 
 __all__ = [
+    "LoginFinishResult",
     "LoginStartResult",
     "PickMethod",
     "ProjectPickResult",

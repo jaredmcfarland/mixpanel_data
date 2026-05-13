@@ -153,6 +153,35 @@ class TestLoadFailures:
             load_inflight()
         assert exc.value.code == "OAUTH_INFLIGHT_CORRUPT"
 
+    def test_schema_too_new_raises_inflight_schema_too_new(
+        self, isolated_storage: Path
+    ) -> None:
+        """Inflight with ``schema_version > INFLIGHT_SCHEMA_VERSION`` → SCHEMA_TOO_NEW.
+
+        Forward-compat guard: if a future CLI bumps the schema version,
+        an older CLI reading the new file should fail loudly rather
+        than silently round-tripping a partially-understood payload.
+        """
+        path = inflight_path()
+        path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        future = {
+            "schema_version": INFLIGHT_SCHEMA_VERSION + 1,
+            "region": "us",
+            "client_id": "c",
+            "redirect_uri": "http://localhost:19284/callback",
+            "pkce_verifier": "x" * 64,
+            "state": "s" * 16,
+            "created_at": int(time.time()),
+            "expires_at": int(time.time()) + INFLIGHT_TTL_SECONDS,
+        }
+        path.write_text(json.dumps(future), encoding="utf-8")
+        with pytest.raises(OAuthError) as exc:
+            load_inflight()
+        assert exc.value.code == "OAUTH_INFLIGHT_SCHEMA_TOO_NEW"
+        assert exc.value.details is not None
+        assert exc.value.details["schema_version"] == INFLIGHT_SCHEMA_VERSION + 1
+        assert exc.value.details["supported"] == INFLIGHT_SCHEMA_VERSION
+
 
 class TestClearInflight:
     """clear_inflight is idempotent."""
@@ -200,6 +229,34 @@ class TestPlaceholderHelpers:
         accounts_root = isolated_storage / "accounts"
         placeholder = new_placeholder_dir(accounts_root)
         assert read_placeholder_meta(placeholder) is None
+
+    def test_read_placeholder_meta_corrupt_raises(self, isolated_storage: Path) -> None:
+        """Malformed JSON in meta.json → OAUTH_PLACEHOLDER_META_CORRUPT.
+
+        The previous behavior silently returned ``None``, which let
+        ``--resume`` default to ``us`` for an EU/IN placeholder and then
+        delete the recoverable tokens via the
+        ``NeedsRegionSwitchError`` cleanup path. Now: corrupt is loud.
+        """
+        accounts_root = isolated_storage / "accounts"
+        placeholder = new_placeholder_dir(accounts_root)
+        (placeholder / "meta.json").write_text("not json", encoding="utf-8")
+        with pytest.raises(OAuthError) as exc:
+            read_placeholder_meta(placeholder)
+        assert exc.value.code == "OAUTH_PLACEHOLDER_META_CORRUPT"
+
+    def test_read_placeholder_meta_non_dict_raises(
+        self, isolated_storage: Path
+    ) -> None:
+        """meta.json holding a JSON array → OAUTH_PLACEHOLDER_META_CORRUPT."""
+        accounts_root = isolated_storage / "accounts"
+        placeholder = new_placeholder_dir(accounts_root)
+        (placeholder / "meta.json").write_text(
+            json.dumps(["not", "a", "dict"]), encoding="utf-8"
+        )
+        with pytest.raises(OAuthError) as exc:
+            read_placeholder_meta(placeholder)
+        assert exc.value.code == "OAUTH_PLACEHOLDER_META_CORRUPT"
 
     def test_read_tokens_from_placeholder_round_trip(
         self, isolated_storage: Path

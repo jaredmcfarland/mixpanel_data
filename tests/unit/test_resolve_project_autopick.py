@@ -137,6 +137,35 @@ class TestSoleSurvivor:
         assert pick.project_id == "3"
         assert pick.method == "sole_survivor"
 
+    def test_sole_survivor_filtered_when_demos_filtered_out(self) -> None:
+        """Two region-compat projects, one demo → ``sole_survivor_filtered``.
+
+        With multiple region-compat projects the line 2684 short-circuit
+        does NOT fire — the auto-pick filter cascade runs and reduces
+        the survivor set to one. The method should reflect that the
+        single survivor came out of a *filtered* pool, so user-facing
+        copy ("the only non-demo, integrated project") is accurate.
+        """
+        me = _me(
+            projects={
+                "10": _proj(name="Real", org_id=1),
+                "20": _proj(name="Demo", org_id=1, is_demo=True),
+            },
+        )
+        pick = _resolve_project(
+            me_resp=me,
+            explicit_project=None,
+            project_picker=None,
+            auto_pick=True,
+            region="us",
+        )
+        assert pick.project_id == "10"
+        assert pick.method == "sole_survivor_filtered"
+        # Funnel still reflects the broader region-compatible pool.
+        assert pick.region_compatible_count == 2
+        assert pick.filtered_count == 1
+        assert pick.demo_excluded == 1
+
 
 class TestPrimaryOrgLowestId:
     """Normal auto-pick: highest-survivor-count org, lowest project ID."""

@@ -40,27 +40,29 @@ def _fake_dcr(
 
 
 class TestDefaultTimeoutBumped:
-    """``OAuthFlow()._http_client.timeout`` must exceed httpx 5s default."""
+    """``OAuthFlow().http_client.timeout`` must exceed httpx 5s default."""
 
     def test_default_read_timeout_at_least_10s(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Read timeout must be >= 10s — accommodates SOCKS handshake + slow /me."""
         monkeypatch.setenv("MP_OAUTH_STORAGE_DIR", str(tmp_path))
-        flow = OAuthFlow(region="us", storage=OAuthStorage())
-        timeout = flow._http_client.timeout  # noqa: SLF001 — testing internal state
-        assert timeout.read is not None
-        assert timeout.read >= 10.0, f"Read timeout {timeout.read}s too short"
+        with OAuthFlow(region="us", storage=OAuthStorage()) as flow:
+            timeout = flow.http_client.timeout
+            assert timeout.read is not None
+            assert timeout.read >= 10.0, f"Read timeout {timeout.read}s too short"
 
     def test_default_connect_timeout_at_least_5s(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Connect timeout must be >= 5s — DNS + TCP through SOCKS proxy."""
         monkeypatch.setenv("MP_OAUTH_STORAGE_DIR", str(tmp_path))
-        flow = OAuthFlow(region="us", storage=OAuthStorage())
-        timeout = flow._http_client.timeout  # noqa: SLF001
-        assert timeout.connect is not None
-        assert timeout.connect >= 5.0, f"Connect timeout {timeout.connect}s too short"
+        with OAuthFlow(region="us", storage=OAuthStorage()) as flow:
+            timeout = flow.http_client.timeout
+            assert timeout.connect is not None
+            assert timeout.connect >= 5.0, (
+                f"Connect timeout {timeout.connect}s too short"
+            )
 
     def test_explicit_http_client_passes_through(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -68,11 +70,52 @@ class TestDefaultTimeoutBumped:
         """Caller-supplied http_client is NOT replaced by the bumped default."""
         monkeypatch.setenv("MP_OAUTH_STORAGE_DIR", str(tmp_path))
         custom = httpx.Client(timeout=httpx.Timeout(2.0))
-        flow = OAuthFlow(region="us", storage=OAuthStorage(), http_client=custom)
         try:
-            assert flow._http_client is custom  # noqa: SLF001
+            flow = OAuthFlow(region="us", storage=OAuthStorage(), http_client=custom)
+            assert flow.http_client is custom
         finally:
             custom.close()
+
+
+class TestLifecycle:
+    """OAuthFlow exposes its dependencies and closes the default httpx client."""
+
+    def test_http_client_property_returns_underlying_client(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """``flow.http_client`` is the same instance the constructor created."""
+        monkeypatch.setenv("MP_OAUTH_STORAGE_DIR", str(tmp_path))
+        with OAuthFlow(region="us", storage=OAuthStorage()) as flow:
+            assert flow.http_client is flow.http_client  # idempotent property
+            assert isinstance(flow.http_client, httpx.Client)
+
+    def test_storage_property_returns_underlying_storage(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """``flow.storage`` is the OAuthStorage passed to the constructor."""
+        monkeypatch.setenv("MP_OAUTH_STORAGE_DIR", str(tmp_path))
+        storage = OAuthStorage()
+        with OAuthFlow(region="us", storage=storage) as flow:
+            assert flow.storage is storage
+
+    def test_context_manager_closes_default_http_client(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Exiting ``with OAuthFlow(...)`` closes the default httpx.Client."""
+        monkeypatch.setenv("MP_OAUTH_STORAGE_DIR", str(tmp_path))
+        with OAuthFlow(region="us", storage=OAuthStorage()) as flow:
+            client = flow.http_client
+            assert not client.is_closed
+        assert client.is_closed
+
+    def test_close_is_idempotent(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Calling ``close()`` twice does not raise."""
+        monkeypatch.setenv("MP_OAUTH_STORAGE_DIR", str(tmp_path))
+        flow = OAuthFlow(region="us", storage=OAuthStorage())
+        flow.close()
+        flow.close()  # second call must be safe (httpx.Client.close is idempotent)
 
 
 class TestPasteReaderRaceFix:
@@ -110,11 +153,11 @@ class TestPasteReaderRaceFix:
         )
         monkeypatch.setattr(flow_mod, "ensure_client_registered", _fake_dcr)
 
-        flow = OAuthFlow(region="us", storage=OAuthStorage())
-        started = time.monotonic()
-        with pytest.raises(OAuthError) as exc:
-            flow.login(open_browser=False)
-        elapsed = time.monotonic() - started
+        with OAuthFlow(region="us", storage=OAuthStorage()) as flow:
+            started = time.monotonic()
+            with pytest.raises(OAuthError) as exc:
+                flow.login(open_browser=False)
+            elapsed = time.monotonic() - started
 
         assert elapsed < 5.0, f"Took {elapsed:.2f}s — race-fix regression?"
         assert exc.value.code in (
@@ -148,7 +191,9 @@ class TestPasteReaderRaceFix:
         monkeypatch.setattr(flow_mod, "start_callback_server", _quick_timeout_server)
         monkeypatch.setattr(flow_mod, "ensure_client_registered", _fake_dcr)
 
-        flow = OAuthFlow(region="us", storage=OAuthStorage())
-        with pytest.raises(OAuthError):
+        with (
+            OAuthFlow(region="us", storage=OAuthStorage()) as flow,
+            pytest.raises(OAuthError),
+        ):
             flow.login(open_browser=False)
         assert callback_called["hit"]

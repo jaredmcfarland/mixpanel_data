@@ -139,6 +139,11 @@ You drive the dance directly via `Bash` calls and `AskUserQuestion`:
    - `"explicit"` → "✓ Logged in to project `<id>` as requested."
    - `"sole_survivor"` → "✓ Logged in to project `<name>` (your only
      active project)."
+   - `"sole_survivor_filtered"` → "✓ Logged in to project `<name>` —
+     the only non-demo, integrated project among your
+     `<region_compatible_count>` projects in this region. The others
+     are demos or have never received events. Run `mp project list` if
+     you want to pick a different one."
    - `"primary_org_lowest_id"` → "✓ Logged in to project `<name>` —
      auto-picked from `<primary_org_name>` (your most-active org;
      `<primary_org_survivor_count>` projects there). Want a different

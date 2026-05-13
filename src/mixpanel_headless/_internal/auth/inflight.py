@@ -208,6 +208,19 @@ def load_inflight() -> InflightSession:
             code="OAUTH_INFLIGHT_CORRUPT",
             details={"path": str(path)},
         ) from exc
+    if session.schema_version > INFLIGHT_SCHEMA_VERSION:
+        raise OAuthError(
+            f"Inflight session at {path} has schema_version="
+            f"{session.schema_version}, newer than this CLI supports "
+            f"({INFLIGHT_SCHEMA_VERSION}). Re-run `mp login --start` after "
+            f"upgrading the CLI.",
+            code="OAUTH_INFLIGHT_SCHEMA_TOO_NEW",
+            details={
+                "path": str(path),
+                "schema_version": session.schema_version,
+                "supported": INFLIGHT_SCHEMA_VERSION,
+            },
+        )
     if session.expires_at < int(time.time()):
         expired_at = datetime.fromtimestamp(session.expires_at, tz=timezone.utc)
         raise OAuthError(
@@ -385,15 +398,29 @@ def save_placeholder_meta(placeholder_dir: Path, *, region: str) -> None:
 
 
 def read_placeholder_meta(placeholder_dir: Path) -> dict[str, object] | None:
-    """Read ``placeholder_dir/meta.json`` if present.
+    """Read ``placeholder_dir/meta.json``, distinguishing absent from corrupt.
+
+    Returns ``None`` only when ``meta.json`` does not exist — this is the
+    signal that the placeholder predates the meta-writing code (legacy
+    ``--resume`` path) and the caller should fall back to a region
+    default. ANY other failure mode (unreadable file, malformed JSON, the
+    parsed value is not a dict) raises so the caller does not silently
+    pick the wrong region for a modern placeholder. Conflating
+    "absent" with "corrupt" here previously let an EU/IN placeholder
+    publish under ``"us"`` and then get cleaned up by the
+    ``NeedsRegionSwitchError`` path, destroying recoverable tokens.
 
     Args:
         placeholder_dir: Placeholder dir to inspect.
 
     Returns:
-        Parsed dict on success, ``None`` if the file is absent (older
-        placeholder dirs predating this helper) or contains invalid JSON.
-        Callers handle ``None`` by falling back to a region default.
+        Parsed dict if ``meta.json`` exists and is a valid JSON object.
+        ``None`` if ``meta.json`` does not exist.
+
+    Raises:
+        OAuthError: ``OAUTH_PLACEHOLDER_META_CORRUPT`` when the file is
+            present but cannot be read, cannot be parsed as JSON, or
+            decodes to something other than a dict.
     """
     path = placeholder_dir / "meta.json"
     if not path.exists():
@@ -401,10 +428,21 @@ def read_placeholder_meta(placeholder_dir: Path) -> dict[str, object] | None:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
-        logger.warning("Could not read placeholder meta at %s: %s", path, exc)
-        return None
+        raise OAuthError(
+            f"Placeholder meta at {path} could not be read: {exc}. "
+            f"Do not delete the placeholder dir — it may still contain "
+            f"recoverable tokens. Re-run `mp login --start --region <REGION>` "
+            f"if you cannot repair the meta.json by hand.",
+            code="OAUTH_PLACEHOLDER_META_CORRUPT",
+            details={"path": str(path)},
+        ) from exc
     if not isinstance(data, dict):
-        return None
+        raise OAuthError(
+            f"Placeholder meta at {path} is not a JSON object "
+            f"(got {type(data).__name__}).",
+            code="OAUTH_PLACEHOLDER_META_CORRUPT",
+            details={"path": str(path)},
+        )
     return data
 
 

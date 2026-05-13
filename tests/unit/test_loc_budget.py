@@ -87,8 +87,9 @@ class TestLocBudget:
       ``accounts.py`` (``ProjectPickResult``, auto-pick filter cascade,
       ``_publish_account_from_tokens``, the three new ``login_unified_*``
       entry points).
-    See the implementation plan at
-    ``~/.claude/plans/claude-cowork-and-i-logical-stallman.md``.
+    See ``specs/043-frictionless-auth/plan.md`` and the contracts under
+    ``specs/043-frictionless-auth/contracts/`` for the two-shot flow
+    design that motivated the most recent bump.
     """
 
     def test_file_count_cap(self) -> None:

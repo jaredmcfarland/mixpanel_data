@@ -107,7 +107,11 @@ def _parse_pasted_redirect(line: str, *, expected_state: str) -> CallbackResult:
         )
     code = code_list[0]
     state = state_list[0]
-    if state != expected_state:
+    # Constant-time compare. Practical timing-oracle exploitability against
+    # a single-use local CLI is limited, but the cost is zero and a string
+    # `!=` here would be the kind of paper cut a future security audit
+    # would (correctly) flag.
+    if not secrets.compare_digest(state, expected_state):
         raise OAuthError(
             "State mismatch — the pasted text does not belong to this login session.",
             code="OAUTH_STATE_MISMATCH",
@@ -185,6 +189,61 @@ class OAuthFlow:
             The region string (``us``, ``eu``, or ``in``).
         """
         return self._region
+
+    @property
+    def http_client(self) -> httpx.Client:
+        """Shared :class:`httpx.Client` used for token exchange and DCR.
+
+        Exposed publicly so the two-shot ``mp login --start`` /
+        ``--finish`` orchestrators in :mod:`mixpanel_headless.accounts`
+        can pass the same connection pool into
+        :func:`ensure_client_registered` without reaching into a
+        leading-underscore attribute.
+
+        Returns:
+            The underlying ``httpx.Client``.
+        """
+        return self._http_client
+
+    @property
+    def storage(self) -> OAuthStorage:
+        """Shared :class:`OAuthStorage` used for token + client persistence.
+
+        Same rationale as :attr:`http_client`: the two-shot login
+        orchestrators reuse this storage so the cached DCR client info
+        survives across ``--start`` / ``--finish`` invocations.
+
+        Returns:
+            The underlying ``OAuthStorage``.
+        """
+        return self._storage
+
+    def close(self) -> None:
+        """Close the underlying :class:`httpx.Client`. Idempotent.
+
+        Safe to call multiple times — ``httpx.Client.close()`` is a
+        no-op after the first close. Library callers can either invoke
+        this directly or use :class:`OAuthFlow` as a context manager.
+        """
+        self._http_client.close()
+
+    def __enter__(self) -> OAuthFlow:
+        """Enter the context — returns ``self``.
+
+        Returns:
+            This :class:`OAuthFlow` instance.
+        """
+        return self
+
+    def __exit__(self, *_exc: object) -> None:
+        """Exit the context — closes the underlying ``httpx.Client``.
+
+        Args:
+            *_exc: Standard ``__exit__`` arguments (exception type,
+                value, traceback). Ignored — :meth:`close` runs
+                regardless of whether the body raised.
+        """
+        self.close()
 
     def get_valid_token(self, region: str) -> str:
         """Return a valid access token, refreshing if expired.

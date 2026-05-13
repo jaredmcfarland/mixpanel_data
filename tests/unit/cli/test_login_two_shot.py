@@ -13,6 +13,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 import pytest
 from pydantic import SecretStr
@@ -150,7 +151,11 @@ class TestStartFlag:
         assert result.exit_code == 0, result.output
         payload = json.loads(result.stdout)
         assert payload["region"] == "eu"
-        assert "eu.mixpanel.com" in payload["authorize_url"]
+        # Compare hostname rather than substring so a future bug that
+        # builds e.g. ``https://eu.mixpanel.com.attacker.example/`` would
+        # still trip this test (also keeps CodeQL's
+        # ``incomplete-url-substring-sanitization`` rule quiet).
+        assert urlparse(payload["authorize_url"]).hostname == "eu.mixpanel.com"
 
 
 class TestFinishHappyPath:
@@ -320,11 +325,81 @@ class TestResumeMissing:
     def test_resume_missing_path_raises(
         self, runner: CliRunner, tmp_path: Path
     ) -> None:
-        """Bogus placeholder path → ConfigError, exit 1."""
-        bogus = tmp_path / ".tmp-deadbeef"
+        """Bogus placeholder path under accounts_root → ConfigError, exit 1."""
+        # Place the bogus path under accounts_root so the path-traversal
+        # guard does not fire before the existence check.
+        from mixpanel_headless._internal.auth.storage import accounts_root
+
+        accounts_root().mkdir(parents=True, exist_ok=True, mode=0o700)
+        bogus = accounts_root() / ".tmp-deadbeef"
         result = runner.invoke(app, ["login", "--resume", str(bogus)])
         assert result.exit_code == 1
-        assert "does not exist" in result.output
+        # Rich wraps long error lines, so collapse whitespace before
+        # substring matching to avoid coupling the test to terminal width.
+        normalized = " ".join(result.output.split())
+        assert "does not exist" in normalized
+
+    def test_resume_path_outside_accounts_root_raises(
+        self, runner: CliRunner, tmp_path: Path
+    ) -> None:
+        """``--resume /tmp/.tmp-foo`` (outside accounts_root) → ConfigError.
+
+        Path-traversal guard: ``--resume`` will rename the placeholder
+        into ``accounts_root()``. If a caller hands us an arbitrary
+        on-disk path, we'd silently exfiltrate whoever's tokens are
+        sitting there. Reject before reading anything.
+        """
+        # tmp_path/.tmp-foo lives outside ``accounts_root()`` (which is
+        # tmp_path/.mp/accounts under the isolated_home fixture).
+        outside = tmp_path / ".tmp-foo-outside"
+        outside.mkdir(mode=0o700)
+        (outside / "tokens.json").write_text("{}", encoding="utf-8")
+        result = runner.invoke(app, ["login", "--resume", str(outside)])
+        assert result.exit_code == 1
+        normalized = " ".join(result.output.split())
+        assert "must live under" in normalized
+
+    def test_resume_corrupt_meta_does_not_delete_placeholder(
+        self,
+        runner: CliRunner,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Corrupt meta.json → loud error, placeholder preserved.
+
+        Previously the silent ``us`` fallback could hand an EU
+        placeholder to ``_publish_account_from_tokens``, raise
+        ``NeedsRegionSwitchError``, and delete the recoverable
+        tokens. Now: corrupt meta raises before any cleanup runs,
+        so the user can repair meta.json and retry.
+        """
+        from mixpanel_headless._internal.auth.inflight import (
+            new_placeholder_dir,
+        )
+        from mixpanel_headless._internal.auth.storage import accounts_root
+
+        accounts_root().mkdir(parents=True, exist_ok=True, mode=0o700)
+        placeholder = new_placeholder_dir(accounts_root())
+        (placeholder / "tokens.json").write_text(
+            json.dumps(
+                {
+                    "access_token": "ya29.access",
+                    "refresh_token": "1//refresh",
+                    "expires_at": "2099-01-01T00:00:00+00:00",
+                    "scope": "read write",
+                    "token_type": "Bearer",
+                }
+            ),
+            encoding="utf-8",
+        )
+        (placeholder / "meta.json").write_text("not json", encoding="utf-8")
+
+        result = runner.invoke(app, ["login", "--resume", str(placeholder)])
+        assert result.exit_code != 0
+        # Placeholder must remain on disk so the user can fix meta.json
+        # by hand and retry without losing their tokens.
+        assert placeholder.exists()
+        assert (placeholder / "tokens.json").exists()
 
 
 class TestPostExchangeFailureSurfacesPlaceholder:
