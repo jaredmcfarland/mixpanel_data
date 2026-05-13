@@ -28,7 +28,11 @@ from mixpanel_headless.cli.utils import (
     handle_errors,
     status_spinner,
 )
-from mixpanel_headless.exceptions import InvalidArgumentError, NeedsRegionSwitchError
+from mixpanel_headless.exceptions import (
+    InvalidArgumentError,
+    LoginFinishPublishError,
+    NeedsRegionSwitchError,
+)
 
 if TYPE_CHECKING:
     from mixpanel_headless._internal.me import MeProjectInfo, MeResponse
@@ -208,6 +212,49 @@ def _build_finish_envelope(result: accounts_ns._PublishResult) -> dict[str, Any]
             "unintegrated_excluded": pick.unintegrated_excluded,
         },
         "next": _PROJECT_NEXT,
+    }
+
+
+def _build_publish_failure_envelope(exc: LoginFinishPublishError) -> dict[str, Any]:
+    """Build the ``state: error code: LOGIN_FINISH_PUBLISH_FAILED`` envelope.
+
+    Surfaces the placeholder path + resume command so the slash command
+    can tell the user exactly how to recover from a post-exchange
+    publish failure (bad ``--name``, project not visible, name
+    collision, transient ``/me`` failure). Re-running ``--finish`` won't
+    work because the OAuth code has already been consumed.
+
+    Args:
+        exc: The :class:`LoginFinishPublishError` carrying placeholder
+            path + original cause.
+
+    Returns:
+        Dict matching the documented post-exchange-failure envelope.
+    """
+    resume_cmd = f"mp login --resume {exc.placeholder_dir}"
+    return {
+        "schema_version": _SCHEMA_VERSION,
+        "state": "error",
+        "error": {
+            "code": "LOGIN_FINISH_PUBLISH_FAILED",
+            "message": exc.message,
+            "actionable": True,
+            "details": {
+                "placeholder_dir": str(exc.placeholder_dir),
+                "original_code": exc.original_code,
+                "original_message": exc.original_message,
+            },
+        },
+        "resume_hint": {
+            "command": resume_cmd,
+            "label": (
+                "Recover with `mp login --resume` — re-running `--finish` "
+                "won't work because the OAuth code is already consumed."
+            ),
+        },
+        "next": [
+            {"command": resume_cmd, "label": "Resume with corrected args"},
+        ],
     }
 
 
@@ -500,6 +547,9 @@ def login(
         except NeedsRegionSwitchError as exc:
             _emit_json(_build_region_switch_envelope(exc))
             raise typer.Exit(ExitCode.NEEDS_SELECTION) from None
+        except LoginFinishPublishError as exc:
+            _emit_json(_build_publish_failure_envelope(exc))
+            raise typer.Exit(ExitCode.GENERAL_ERROR) from None
         _emit_json(_build_finish_envelope(result))
         return
 
@@ -515,6 +565,9 @@ def login(
         except NeedsRegionSwitchError as exc:
             _emit_json(_build_region_switch_envelope(exc))
             raise typer.Exit(ExitCode.NEEDS_SELECTION) from None
+        except LoginFinishPublishError as exc:
+            _emit_json(_build_publish_failure_envelope(exc))
+            raise typer.Exit(ExitCode.GENERAL_ERROR) from None
         _emit_json(_build_finish_envelope(result))
         return
 

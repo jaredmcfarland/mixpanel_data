@@ -325,3 +325,186 @@ class TestResumeMissing:
         result = runner.invoke(app, ["login", "--resume", str(bogus)])
         assert result.exit_code == 1
         assert "does not exist" in result.output
+
+
+class TestPostExchangeFailureSurfacesPlaceholder:
+    """Token exchange succeeds + publish fails → envelope carries placeholder.
+
+    Codex review [P2]: when post-exchange publish fails (bad --name,
+    project not visible, /me parse error), the OAuth code is consumed
+    and re-running --finish would fail at exchange. The user must
+    `mp login --resume <PATH>` instead — but they need the path. The
+    LoginFinishPublishError wrap surfaces it through a structured JSON
+    envelope.
+    """
+
+    def test_invalid_name_emits_publish_failure_envelope(
+        self,
+        runner: CliRunner,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        """Bad --name passes the regex but trips the path-traversal guard."""
+        _stub_dcr(monkeypatch)
+        _stub_exchange(monkeypatch)
+        _stub_me(
+            monkeypatch,
+            _me_payload(
+                {
+                    "100": {
+                        "name": "Test Project",
+                        "organization_id": 1,
+                        "domain": "mixpanel.com",
+                        "is_demo": False,
+                        "has_integrated": True,
+                    },
+                }
+            ),
+        )
+
+        result_start = runner.invoke(app, ["login", "--start"])
+        assert result_start.exit_code == 0
+        state = (
+            json.loads(result_start.stdout)["authorize_url"]
+            .split("state=")[1]
+            .split("&")[0]
+        )
+        redirect = f"http://localhost:19284/callback?code=foo&state={state}"
+
+        # --name "../escape" fails the account_dir regex AFTER tokens.json
+        # is written to the placeholder. The wrap should surface the
+        # placeholder path.
+        result = runner.invoke(
+            app,
+            ["login", "--finish", redirect, "--name", "../escape"],
+        )
+        assert result.exit_code == 1, result.output
+        payload = json.loads(result.stdout)
+        assert payload["state"] == "error"
+        assert payload["error"]["code"] == "LOGIN_FINISH_PUBLISH_FAILED"
+        assert payload["error"]["actionable"] is True
+        assert payload["error"]["details"]["placeholder_dir"].endswith(
+            tuple(
+                f"{name}"
+                for name in payload["error"]["details"]["placeholder_dir"].split("/")[
+                    -1:
+                ]
+            )
+        )
+        # Original cause is preserved so consumers can still branch on it.
+        assert payload["error"]["details"]["original_code"] == "CONFIG_ERROR"
+        # Resume hint with exact command.
+        resume_cmd = payload["resume_hint"]["command"]
+        assert resume_cmd.startswith("mp login --resume ")
+        assert ".tmp-" in resume_cmd
+
+        # Placeholder dir must still exist on disk so --resume actually works.
+        placeholder_path = Path(payload["error"]["details"]["placeholder_dir"])
+        assert placeholder_path.exists()
+        assert (placeholder_path / "tokens.json").exists()
+
+        # Inflight should be cleared (code is consumed; re-running --finish
+        # with the same paste would fail at exchange anyway).
+        from mixpanel_headless._internal.auth.inflight import inflight_path
+
+        assert not inflight_path().exists()
+
+    def test_project_not_visible_emits_publish_failure_envelope(
+        self,
+        runner: CliRunner,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """--project ID not in /me → wrapped as LoginFinishPublishError."""
+        _stub_dcr(monkeypatch)
+        _stub_exchange(monkeypatch)
+        _stub_me(
+            monkeypatch,
+            _me_payload(
+                {
+                    "100": {
+                        "name": "Visible",
+                        "organization_id": 1,
+                        "domain": "mixpanel.com",
+                        "is_demo": False,
+                        "has_integrated": True,
+                    },
+                }
+            ),
+        )
+
+        result_start = runner.invoke(app, ["login", "--start"])
+        assert result_start.exit_code == 0
+        state = (
+            json.loads(result_start.stdout)["authorize_url"]
+            .split("state=")[1]
+            .split("&")[0]
+        )
+        redirect = f"http://localhost:19284/callback?code=foo&state={state}"
+
+        result = runner.invoke(
+            app,
+            ["login", "--finish", redirect, "--project", "999"],
+        )
+        assert result.exit_code == 1, result.output
+        payload = json.loads(result.stdout)
+        assert payload["state"] == "error"
+        assert payload["error"]["code"] == "LOGIN_FINISH_PUBLISH_FAILED"
+        # Underlying ProjectNotFoundError code is preserved.
+        assert payload["error"]["details"]["original_code"] == "PROJECT_NOT_FOUND"
+        assert "mp login --resume" in payload["resume_hint"]["command"]
+
+
+class TestCrossRegionCleansUpPlaceholder:
+    """NeedsRegionSwitchError must NOT leave the placeholder on disk.
+
+    Cross-region is fundamental, not transient — re-running --resume
+    against the same placeholder hits the exact same error. The CLI
+    should clean up the placeholder so the user can `mp login --start
+    --region eu` cleanly without orphan dirs.
+    """
+
+    def test_cross_region_removes_placeholder(
+        self,
+        runner: CliRunner,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        """After NEEDS_REGION_SWITCH, ~/.mp/accounts/.tmp-* is gone."""
+        _stub_dcr(monkeypatch)
+        _stub_exchange(monkeypatch)
+        _stub_me(
+            monkeypatch,
+            _me_payload(
+                {
+                    "100": {
+                        "name": "EU Project",
+                        "organization_id": 1,
+                        "domain": "eu.mixpanel.com",
+                        "is_demo": False,
+                        "has_integrated": True,
+                    },
+                }
+            ),
+        )
+
+        result_start = runner.invoke(app, ["login", "--start"])
+        assert result_start.exit_code == 0
+        state = (
+            json.loads(result_start.stdout)["authorize_url"]
+            .split("state=")[1]
+            .split("&")[0]
+        )
+        redirect = f"http://localhost:19284/callback?code=foo&state={state}"
+
+        result = runner.invoke(app, ["login", "--finish", redirect])
+        assert result.exit_code == 6  # NEEDS_SELECTION
+
+        # No orphan placeholder dirs.
+        accounts_dir = tmp_path / ".mp" / "accounts"
+        if accounts_dir.exists():
+            leftovers = [
+                p for p in accounts_dir.iterdir() if p.name.startswith(".tmp-")
+            ]
+            assert leftovers == [], (
+                f"Cross-region failure left orphan placeholder(s): {leftovers}"
+            )

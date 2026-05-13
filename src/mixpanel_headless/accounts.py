@@ -45,6 +45,7 @@ from mixpanel_headless.exceptions import (
     AccountExistsError,
     ConfigError,
     InvalidArgumentError,
+    LoginFinishPublishError,
     MixpanelHeadlessError,
     NeedsRegionSwitchError,
     OAuthError,
@@ -2163,11 +2164,30 @@ def login_unified_finish(
             cached_me=None,
             progress=progress,
         )
-    except Exception:
-        # Keep inflight in place so user can retry --finish with a
-        # corrected paste (e.g., fixed state mismatch). Placeholder is
-        # also preserved (tokens.json exists). Re-raise so the CLI
-        # surfaces the structured error.
+    except NeedsRegionSwitchError:
+        # Cross-region is fundamental, not transient — re-running
+        # --resume against this placeholder would hit the same error.
+        # Clean up the placeholder + inflight so the user can run
+        # `mp login --start --region eu` (or whichever region) without
+        # an orphan .tmp-* dir lingering forever.
+        _safe_rmtree_warn(placeholder_dir)
+        clear_inflight()
+        raise
+    except Exception as exc:
+        # Token exchange already consumed the OAuth code, so re-running
+        # --finish with the same paste will fail at the IdP. Clear the
+        # inflight (it's useless now). If the placeholder still has
+        # tokens.json, wrap as LoginFinishPublishError so the CLI can
+        # surface the resume command. Post-rename failures (handled by
+        # the inner except in _publish_account_from_tokens) leave the
+        # placeholder gone, in which case the original exception
+        # propagates unchanged.
+        clear_inflight()
+        if (placeholder_dir / "tokens.json").exists():
+            raise LoginFinishPublishError(
+                placeholder_dir=placeholder_dir,
+                cause=exc,
+            ) from exc
         raise
 
     clear_inflight()
@@ -2252,18 +2272,36 @@ def login_unified_resume(
     cached_me = load_cached_me_from_placeholder(placeholder_dir)
 
     cm = _config()
-    result = _publish_account_from_tokens(
-        cm,
-        tokens=tokens,
-        region=region,
-        placeholder_dir=placeholder_dir,
-        name=name,
-        project=project,
-        project_picker=project_picker,
-        auto_pick=True,
-        cached_me=cached_me,  # type: ignore[arg-type]  # MeResponse cast at runtime
-        progress=progress,
-    )
+    try:
+        result = _publish_account_from_tokens(
+            cm,
+            tokens=tokens,
+            region=region,
+            placeholder_dir=placeholder_dir,
+            name=name,
+            project=project,
+            project_picker=project_picker,
+            auto_pick=True,
+            cached_me=cached_me,  # type: ignore[arg-type]  # runtime MeResponse cast
+            progress=progress,
+        )
+    except NeedsRegionSwitchError:
+        # Same as --finish: cross-region is unrecoverable via --resume.
+        # Clean up the placeholder so the user can `mp login --start
+        # --region eu` cleanly.
+        _safe_rmtree_warn(placeholder_dir)
+        clear_inflight()
+        raise
+    except Exception as exc:
+        # Tokens still exist on disk; wrap so the slash command can
+        # render the resume command (same path the user passed in).
+        if (placeholder_dir / "tokens.json").exists():
+            raise LoginFinishPublishError(
+                placeholder_dir=placeholder_dir,
+                cause=exc,
+            ) from exc
+        raise
+
     clear_inflight()
     use(result.summary.name)
     return result

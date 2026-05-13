@@ -19,6 +19,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from mixpanel_headless._internal.auth.account import Region
     from mixpanel_headless.accounts import ProjectPickResult
 
@@ -1245,6 +1247,99 @@ class NeedsRegionSwitchError(OAuthError):
     def pick(self) -> ProjectPickResult:
         """The full :class:`ProjectPickResult` carrying cross-region data."""
         return self._pick
+
+
+class LoginFinishPublishError(MixpanelHeadlessError):
+    """Token exchange succeeded but the publish step failed.
+
+    Raised by :func:`mixpanel_headless.accounts.login_unified_finish` (and
+    :func:`login_unified_resume`) when the OAuth code has already been
+    exchanged for tokens but the subsequent ``/me`` probe / project
+    resolution / account write failed in a recoverable way (bad
+    ``--name``, project not visible, name collision, transient ``/me``
+    failure, etc.). Re-running ``mp login --finish`` would fail at the
+    token exchange step because the IdP one-time-uses authorization
+    codes; the user must run ``mp login --resume <placeholder_dir>``
+    with corrected args to recover.
+
+    Carries ``placeholder_dir`` so the CLI / slash command can surface
+    the exact resume command without the user having to ``ls
+    ~/.mp/accounts/`` for a ``.tmp-*`` directory. The original error's
+    code, message, and details are preserved so consumers can still
+    branch on the underlying cause.
+
+    Maps to ``ExitCode.GENERAL_ERROR`` (1) by default; the CLI's
+    ``--finish`` / ``--resume`` paths catch it explicitly and emit a
+    structured JSON error envelope on stdout before exit.
+
+    Example:
+        ```python
+        try:
+            result = login_unified_finish(pasted_url=url)
+        except LoginFinishPublishError as exc:
+            print(f"Resume with: mp login --resume {exc.placeholder_dir}")
+            print(f"Original cause: {exc.original_code}: {exc.original_message}")
+        ```
+    """
+
+    def __init__(
+        self,
+        *,
+        placeholder_dir: Path,
+        cause: BaseException,
+    ) -> None:
+        """Initialize LoginFinishPublishError.
+
+        Args:
+            placeholder_dir: The ``.tmp-{nonce}`` directory still on disk
+                with valid ``tokens.json``. The user passes this to
+                ``mp login --resume`` to recover.
+            cause: The underlying exception that triggered the publish
+                failure. ``code``, ``message``, and ``details`` are
+                copied into this wrapper for slash-command rendering.
+        """
+        self._placeholder_dir = placeholder_dir
+        original_code = str(getattr(cause, "code", None) or type(cause).__name__)
+        original_message = str(cause)
+        original_details = (
+            dict(getattr(cause, "details", {}) or {})
+            if hasattr(cause, "details")
+            else {}
+        )
+        self._original_code = original_code
+        self._original_message = original_message
+        message = (
+            f"Token exchange succeeded but publish failed: "
+            f"{original_code}: {original_message}\n\n"
+            f"Recover with: mp login --resume {placeholder_dir}\n"
+            f"(Re-running --finish won't work — the OAuth code has already "
+            f"been consumed.)"
+        )
+        super().__init__(
+            message,
+            code="LOGIN_FINISH_PUBLISH_FAILED",
+            details={
+                "placeholder_dir": str(placeholder_dir),
+                "original_code": original_code,
+                "original_message": original_message,
+                "original_details": original_details,
+            },
+        )
+
+    @property
+    def placeholder_dir(self) -> Path:
+        """The ``.tmp-{nonce}`` placeholder directory ready for ``--resume``."""
+        return self._placeholder_dir
+
+    @property
+    def original_code(self) -> str:
+        """Machine-readable code of the underlying publish failure."""
+        return self._original_code
+
+    @property
+    def original_message(self) -> str:
+        """Human-readable message of the underlying publish failure."""
+        return self._original_message
 
 
 class WorkspaceScopeError(MixpanelHeadlessError):
