@@ -16,9 +16,10 @@ import json
 import logging
 import os
 import random
+import re
 import time
 from collections.abc import Callable, Iterator
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import TYPE_CHECKING, Any, Literal
 from urllib.parse import quote
 
@@ -1875,18 +1876,72 @@ class MixpanelAPIClient:
     # Discovery API
     # =========================================================================
 
-    def get_events(self) -> list[str]:
-        """List all event names in the project.
+    # Server-side ceiling on the /events/names ``limit`` parameter;
+    # higher values are silently clamped server-side.
+    _EVENTS_NAMES_MAX_LIMIT = 5000
+    # Widest ``from_date`` the server accepts — pre-2000 dates are
+    # rejected with "Error in from_date: invalid date, bad year". On
+    # projects whose ``max_data_history_days`` window is shorter than
+    # (today − 2000-01-01), the resulting 403 ("Date range exceeds N
+    # days into the past") triggers a single retry with
+    # ``today − N days``.
+    _EVENTS_NAMES_WIDE_FROM_DATE = "2000-01-01"
+
+    def get_events(
+        self,
+        *,
+        limit: int = _EVENTS_NAMES_MAX_LIMIT,
+        from_date: str | None = None,
+        to_date: str | None = None,
+    ) -> list[str]:
+        """List event names in the project.
+
+        Defaults aim at the widest possible window: ``limit`` is the
+        server-side ceiling (5000), ``from_date`` reaches back to the
+        Unix epoch, and ``to_date`` is today. The Mixpanel
+        ``/events/names`` endpoint is gated by the per-project
+        ``max_data_history_days`` feature; if the wide ``from_date`` is
+        rejected with HTTP 403, the failing response carries a
+        "Date range exceeds N days into the past" message, and this
+        method automatically retries with ``today - N days``.
+
+        Args:
+            limit: Maximum events to return. Capped server-side at
+                5000; values above are silently clamped.
+            from_date: ``YYYY-MM-DD`` lower bound. Defaults to
+                ``1970-01-01`` and falls back to the project's
+                ``max_data_history_days`` ceiling when rejected.
+            to_date: ``YYYY-MM-DD`` upper bound. Defaults to today
+                (UTC).
 
         Returns:
             List of event name strings.
 
         Raises:
             AuthenticationError: Invalid credentials.
+            QueryError: 403 errors unrelated to date-range gating, or
+                any other 4xx the endpoint emits.
         """
         url = self._build_url("query", "/events/names")
-        response = self._request("GET", url, params={"type": "general"})
-        # Response is a list of event names
+        resolved_from = from_date or self._EVENTS_NAMES_WIDE_FROM_DATE
+        resolved_to = to_date or date.today().isoformat()
+        params: dict[str, Any] = {
+            "type": "general",
+            "limit": limit,
+            "from_date": resolved_from,
+            "to_date": resolved_to,
+        }
+        try:
+            response = self._request("GET", url, params=params)
+        except QueryError as exc:
+            match = re.search(r"exceeds\s+(\d+)\s+days", str(exc))
+            if not match or from_date is not None:
+                raise
+            allowed_days = int(match.group(1))
+            params["from_date"] = (
+                date.today() - timedelta(days=allowed_days)
+            ).isoformat()
+            response = self._request("GET", url, params=params)
         if isinstance(response, list):
             return [str(e) for e in response]
         return []
