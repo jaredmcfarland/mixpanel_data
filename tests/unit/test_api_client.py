@@ -6,6 +6,7 @@ Tests use httpx.MockTransport for deterministic HTTP mocking.
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
 from typing import Any
 
 import httpx
@@ -2960,7 +2961,7 @@ class TestClientIdentificationHeaders:
     """User-Agent stamping on every outbound request path."""
 
     @pytest.fixture(autouse=True)
-    def _reset_entry_point(self) -> Any:
+    def _reset_entry_point(self) -> Iterator[None]:
         """Force ``"lib"`` for each test, then restore the prior value.
 
         Other test modules may import ``cli.main``, which flips the
