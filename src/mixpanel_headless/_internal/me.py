@@ -325,7 +325,7 @@ class MeCache:
             logger.warning("Refusing to read /me cache at %s: %s", path, e)
             return None
         except (json.JSONDecodeError, OSError) as e:
-            logger.debug("Corrupted cache file %s: %s", path, e)
+            logger.debug("Corrupted cache file %s: %s", path.name, e)
             return None
 
         # Check TTL
@@ -348,9 +348,9 @@ class MeCache:
             # Then unlink the file so the next call deterministically refetches
             # rather than re-paying the parse cost.
             logger.warning(
-                "Cached /me response at %s no longer matches the model "
+                "Cached /me response in %s no longer matches the model "
                 "(schema drift). Invalidating: %s",
-                path,
+                path.name,
                 e,
             )
             path.unlink(missing_ok=True)

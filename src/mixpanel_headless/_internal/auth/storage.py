@@ -321,8 +321,7 @@ class OAuthStorage:
             dir_st = None
         if dir_st is not None and stat.S_ISLNK(dir_st.st_mode):
             logger.warning(
-                "Refusing to chmod through symlinked storage directory %s.",
-                self._storage_dir,
+                "Refusing to chmod through symlinked storage directory."
             )
         elif dir_st is not None:
             dir_mode = stat.S_IMODE(dir_st.st_mode)
@@ -335,10 +334,10 @@ class OAuthStorage:
                     stat.S_IRWXU,
                     open_flags=dir_open_flags,
                     fallback_message=(
-                        "Cannot repair directory permissions on %s. "
-                        "Expected 0o700, got %s. Run: chmod 700 %s"
+                        "Cannot repair storage directory permissions. "
+                        "Expected 0o700, got %s."
                     ),
-                    fallback_args=(self._storage_dir, oct(dir_mode), self._storage_dir),
+                    fallback_args=(oct(dir_mode),),
                 )
 
         # Check file permissions. lstat for the same reason as the dir branch.
@@ -351,7 +350,7 @@ class OAuthStorage:
                 "Refusing to chmod through symlink at %s. "
                 "The subsequent read will reject the symlink and the cache "
                 "will be re-fetched.",
-                path,
+                path.name,
             )
             return
         file_mode = stat.S_IMODE(file_st.st_mode)
@@ -361,10 +360,9 @@ class OAuthStorage:
                 stat.S_IRUSR | stat.S_IWUSR,
                 open_flags=os.O_RDONLY | os.O_NOFOLLOW,
                 fallback_message=(
-                    "Cannot repair file permissions on %s. "
-                    "Expected 0o600, got %s. Run: chmod 600 %s"
+                    "Cannot repair file permissions on %s. Expected 0o600, got %s."
                 ),
-                fallback_args=(path, oct(file_mode), path),
+                fallback_args=(path.name, oct(file_mode)),
             )
 
     def _write_file(self, path: Path, data: dict[str, Any]) -> None:
@@ -417,12 +415,14 @@ class OAuthStorage:
             logger.warning("Refusing to read credential file %s: %s", path, exc)
             return None
         except (json.JSONDecodeError, ValueError, UnicodeDecodeError):
-            logger.warning("Corrupted or invalid JSON in %s — ignoring file.", path)
+            logger.warning(
+                "Corrupted or invalid JSON in %s — ignoring file.", path.name
+            )
             return None
         if not isinstance(parsed, dict):
             logger.warning(
                 "Expected JSON object in %s, got %s — ignoring file.",
-                path,
+                path.name,
                 type(parsed).__name__,
             )
             return None
@@ -519,8 +519,8 @@ class OAuthStorage:
             )
         except (KeyError, TypeError, ValueError) as exc:
             logger.warning(
-                "Failed to parse tokens from %s: %s — ignoring file.",
-                self._tokens_path(region),
+                "Failed to parse tokens from tokens_%s.json: %s — ignoring file.",
+                region,
                 exc,
             )
             return None
@@ -568,8 +568,8 @@ class OAuthStorage:
             return OAuthClientInfo.model_validate(data)
         except (KeyError, TypeError, ValueError) as exc:
             logger.warning(
-                "Failed to parse client info from %s: %s — ignoring file.",
-                self._client_path(region),
+                "Failed to parse client info from client_%s.json: %s — ignoring file.",
+                region,
                 exc,
             )
             return None
