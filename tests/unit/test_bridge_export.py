@@ -12,6 +12,7 @@ Reference:
 from __future__ import annotations
 
 import json
+import os
 import stat
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -32,6 +33,11 @@ from mixpanel_headless._internal.auth.bridge import (
 )
 from mixpanel_headless._internal.auth.token_resolver import OnDiskTokenResolver
 from mixpanel_headless.exceptions import OAuthError
+
+_REQUIRES_O_NOFOLLOW = pytest.mark.skipif(
+    not hasattr(os, "O_NOFOLLOW"),
+    reason="O_NOFOLLOW required; Windows is not in scope",
+)
 
 
 @pytest.fixture(autouse=True)
@@ -309,10 +315,7 @@ class TestBridgeSymlinkRejection:
     Both must refuse a symlink at the leaf component.
     """
 
-    @pytest.mark.skipif(
-        not hasattr(__import__("os"), "O_NOFOLLOW"),
-        reason="O_NOFOLLOW required; Windows is not in scope",
-    )
+    @_REQUIRES_O_NOFOLLOW
     def test_load_bridge_symlink_raises_configerror(self, tmp_path: Path) -> None:
         """A symlink at the bridge path raises ``ConfigError``."""
         from mixpanel_headless.exceptions import ConfigError
@@ -340,10 +343,7 @@ class TestBridgeSymlinkRejection:
         with pytest.raises(ConfigError, match="symlink"):
             load_bridge(link)
 
-    @pytest.mark.skipif(
-        not hasattr(__import__("os"), "O_NOFOLLOW"),
-        reason="O_NOFOLLOW required; Windows is not in scope",
-    )
+    @_REQUIRES_O_NOFOLLOW
     def test_export_bridge_symlinked_tokens_raises_oautherror(
         self, tmp_path: Path
     ) -> None:
@@ -366,6 +366,30 @@ class TestBridgeSymlinkRejection:
         )
         attacker.chmod(0o600)
         (account_dir / "tokens.json").symlink_to(attacker)
+        out = tmp_path / "bridge.json"
+        with pytest.raises(OAuthError, match="symlink"):
+            export_bridge(account, to=out, token_resolver=OnDiskTokenResolver())
+
+    @_REQUIRES_O_NOFOLLOW
+    def test_dangling_bridge_symlink_rejected(self, tmp_path: Path) -> None:
+        """A dangling symlink at the bridge path raises ``ConfigError``.
+
+        Regression for the ``Path.exists()`` follows-symlink trap.
+        """
+        from mixpanel_headless.exceptions import ConfigError
+
+        link = tmp_path / "bridge.json"
+        link.symlink_to(tmp_path / "missing.json")
+        with pytest.raises(ConfigError, match="symlink"):
+            load_bridge(link)
+
+    @_REQUIRES_O_NOFOLLOW
+    def test_dangling_browser_tokens_symlink_rejected(self, tmp_path: Path) -> None:
+        """A dangling symlink at per-account tokens.json raises ``OAuthError``."""
+        account = OAuthBrowserAccount(name="personal", region="us")
+        account_dir = tmp_path / ".mp" / "accounts" / "personal"
+        account_dir.mkdir(parents=True, mode=0o700)
+        (account_dir / "tokens.json").symlink_to(tmp_path / "missing.json")
         out = tmp_path / "bridge.json"
         with pytest.raises(OAuthError, match="symlink"):
             export_bridge(account, to=out, token_resolver=OnDiskTokenResolver())

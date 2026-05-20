@@ -41,6 +41,7 @@ from mixpanel_headless._internal.io_utils import (
     CredentialPathError,
     atomic_write_bytes,
     read_credential_text,
+    reject_if_symlink,
 )
 
 logger = logging.getLogger(__name__)
@@ -137,6 +138,52 @@ def ensure_account_dir(name: str) -> Path:
     # Defensive chmod so a pre-existing dir with looser permissions gets locked down.
     path.chmod(stat.S_IRWXU)
     return path
+
+
+def _fchmod_no_follow(
+    path: Path,
+    mode: int,
+    *,
+    open_flags: int,
+    fallback_message: str,
+    fallback_args: tuple[object, ...],
+) -> None:
+    """Chmod ``path`` to ``mode`` without following symlinks.
+
+    Opens ``path`` with ``open_flags`` (caller supplies the right
+    combination: ``O_RDONLY | O_NOFOLLOW`` for regular files,
+    ``O_RDONLY | O_DIRECTORY | O_NOFOLLOW`` for directories), then
+    applies ``mode`` via :func:`os.fchmod`. The fd pins the inode, so
+    the chmod is TOCTOU-free w.r.t. the open.
+
+    If the open fails because ``path`` became a symlink between the
+    earlier ``lstat`` and now (ELOOP, or ENOTDIR on macOS when paired
+    with ``O_DIRECTORY``), logs and returns. Other ``OSError``s emit
+    the ``fallback_message`` (matching the historic chmod-failure log
+    shape) so users get the same actionable message they did before.
+
+    Args:
+        path: File or directory to chmod.
+        mode: Target POSIX mode bits.
+        open_flags: ``os.open`` flags. Must include ``O_NOFOLLOW``.
+        fallback_message: Log format string used when chmod cannot
+            be applied (file vanished, permission denied, etc.).
+        fallback_args: Args interpolated into ``fallback_message``.
+    """
+    try:
+        fd = os.open(str(path), open_flags)
+    except OSError:
+        # Race: file disappeared or became a symlink. Bail without
+        # touching the target.
+        logger.warning(*((fallback_message,) + fallback_args))
+        return
+    try:
+        try:
+            os.fchmod(fd, mode)
+        except OSError:
+            logger.warning(*((fallback_message,) + fallback_args))
+    finally:
+        os.close(fd)
 
 
 class OAuthStorage:
@@ -240,15 +287,12 @@ class OAuthStorage:
 
         Verifies that the storage directory has ``0o700`` permissions and
         the specified file has ``0o600`` permissions. Attempts to repair
-        incorrect permissions via ``os.chmod()``. Logs a warning if
-        repair fails.
+        incorrect permissions via ``fchmod`` on an ``O_NOFOLLOW``-opened
+        fd (NOT ``path.chmod()``, which follows symlinks even after the
+        lstat check). The fd pins the inode, so the chmod is TOCTOU-free.
 
-        Symlink handling: uses ``lstat`` and refuses to chmod through a
-        symlink. The chmod would otherwise operate on the symlink's
-        target, which an attacker controls by choosing where the
-        symlink points — turning a "fix permissions" routine into a
-        primitive that auto-tightens an attacker file to 0o600 right
-        before we read it. The read itself is later rejected by
+        Symlink handling: uses ``lstat`` and refuses to even open a fd
+        through a symlink. The read itself is later rejected by
         :func:`read_credential_text` via ``O_NOFOLLOW``, so this
         method just has to avoid leaving a chmod side effect on a
         symlinked target.
@@ -270,17 +314,16 @@ class OAuthStorage:
         elif dir_st is not None:
             dir_mode = stat.S_IMODE(dir_st.st_mode)
             if dir_mode != 0o700:
-                try:
-                    self._storage_dir.chmod(stat.S_IRWXU)
-                except OSError:
-                    logger.warning(
+                _fchmod_no_follow(
+                    self._storage_dir,
+                    stat.S_IRWXU,
+                    open_flags=os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+                    fallback_message=(
                         "Cannot repair directory permissions on %s. "
-                        "Expected 0o700, got %s. "
-                        "Run: chmod 700 %s",
-                        self._storage_dir,
-                        oct(dir_mode),
-                        self._storage_dir,
-                    )
+                        "Expected 0o700, got %s. Run: chmod 700 %s"
+                    ),
+                    fallback_args=(self._storage_dir, oct(dir_mode), self._storage_dir),
+                )
 
         # Check file permissions. lstat for the same reason as the dir branch.
         try:
@@ -297,17 +340,16 @@ class OAuthStorage:
             return
         file_mode = stat.S_IMODE(file_st.st_mode)
         if file_mode != 0o600:
-            try:
-                path.chmod(stat.S_IRUSR | stat.S_IWUSR)
-            except OSError:
-                logger.warning(
+            _fchmod_no_follow(
+                path,
+                stat.S_IRUSR | stat.S_IWUSR,
+                open_flags=os.O_RDONLY | os.O_NOFOLLOW,
+                fallback_message=(
                     "Cannot repair file permissions on %s. "
-                    "Expected 0o600, got %s. "
-                    "Run: chmod 600 %s",
-                    path,
-                    oct(file_mode),
-                    path,
-                )
+                    "Expected 0o600, got %s. Run: chmod 600 %s"
+                ),
+                fallback_args=(path, oct(file_mode), path),
+            )
 
     def _write_file(self, path: Path, data: dict[str, Any]) -> None:
         """Atomically write JSON data to ``path`` with mode ``0o600``.
@@ -338,6 +380,13 @@ class OAuthStorage:
             Parsed dictionary, or None if the file does not exist or
             contains invalid/non-JSON data.
         """
+        # Probe for symlink before existence check — see the analogous
+        # pattern in ``me.MeCache.get`` and ``bridge.load_bridge``.
+        try:
+            reject_if_symlink(path)
+        except CredentialPathError as exc:
+            logger.warning("Refusing to read credential file %s: %s", path, exc)
+            return None
         if not path.exists():
             return None
         self._check_and_fix_permissions(path)

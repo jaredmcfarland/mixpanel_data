@@ -24,6 +24,7 @@ from mixpanel_headless._internal.io_utils import (
     CredentialPathError,
     atomic_write_bytes,
     read_credential_text,
+    reject_if_symlink,
 )
 from mixpanel_headless.exceptions import AuthenticationError, ConfigError, QueryError
 
@@ -298,6 +299,17 @@ class MeCache:
             ```
         """
         path = self._cache_path()
+        # Probe for symlink before existence check. A dangling symlink
+        # would silently pass through ``exists()`` returning False, and
+        # the read helper would never see the symlink shape — losing
+        # the security signal we just added. ``reject_if_symlink``
+        # surfaces it as ``CredentialPathError``, caught and logged
+        # below.
+        try:
+            reject_if_symlink(path)
+        except CredentialPathError as e:
+            logger.warning("Refusing to read /me cache at %s: %s", path, e)
+            return None
         if not path.exists():
             return None
 

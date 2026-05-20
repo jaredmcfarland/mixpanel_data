@@ -51,6 +51,7 @@ from mixpanel_headless._internal.auth.token import OAuthTokens
 from mixpanel_headless._internal.io_utils import (
     atomic_write_bytes,
     read_credential_text,
+    reject_if_symlink,
 )
 from mixpanel_headless.exceptions import ConfigError, OAuthError
 
@@ -163,6 +164,16 @@ def load_bridge(path: Path | None = None) -> BridgeFile | None:
         candidates.extend(default_bridge_search_paths())
 
     for candidate in candidates:
+        # Probe for a symlink BEFORE the existence check — Path.exists()
+        # follows symlinks and silently returns False for dangling
+        # links, hiding the attack signal.
+        try:
+            reject_if_symlink(candidate)
+        except OSError as exc:
+            raise ConfigError(
+                f"Could not read bridge file at {candidate}: {exc}",
+                details={"path": str(candidate)},
+            ) from exc
         if not candidate.exists():
             continue
         try:
@@ -205,6 +216,15 @@ def _read_browser_tokens(name: str) -> OAuthTokens:
             refresh attempt.
     """
     path = account_dir(name) / "tokens.json"
+    # Probe for symlink before existence check — see ``load_bridge``.
+    try:
+        reject_if_symlink(path)
+    except OSError as exc:
+        raise OAuthError(
+            f"Could not read OAuth tokens for account '{name}' from {path}: {exc}",
+            code="OAUTH_TOKEN_ERROR",
+            details={"account_name": name, "path": str(path)},
+        ) from exc
     if not path.exists():
         raise OAuthError(
             f"No OAuth tokens found for account '{name}' at {path}. "

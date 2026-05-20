@@ -27,6 +27,11 @@ from mixpanel_headless._internal.auth.account import (
 from mixpanel_headless._internal.auth.token_resolver import OnDiskTokenResolver
 from mixpanel_headless.exceptions import OAuthError
 
+_REQUIRES_O_NOFOLLOW = pytest.mark.skipif(
+    not hasattr(os, "O_NOFOLLOW"),
+    reason="O_NOFOLLOW required; Windows is not in scope",
+)
+
 
 @pytest.fixture
 def isolated_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
@@ -511,10 +516,7 @@ class TestSymlinkRejection:
     domain-specific.
     """
 
-    @pytest.mark.skipif(
-        not hasattr(os, "O_NOFOLLOW"),
-        reason="O_NOFOLLOW required; Windows is not in scope",
-    )
+    @_REQUIRES_O_NOFOLLOW
     def test_symlinked_tokens_raises_oautherror(self, isolated_home: Path) -> None:
         """Symlinked tokens.json yields OAuthError with the symlink path named."""
         account_dir = isolated_home / ".mp" / "accounts" / "personal"
@@ -534,6 +536,25 @@ class TestSymlinkRejection:
         )
         attacker.chmod(0o600)
         (account_dir / "tokens.json").symlink_to(attacker)
+        resolver = OnDiskTokenResolver()
+        with pytest.raises(OAuthError, match="symlink"):
+            resolver.get_browser_token("personal", "us")
+
+    @_REQUIRES_O_NOFOLLOW
+    def test_dangling_symlink_tokens_raises_oautherror(
+        self, isolated_home: Path
+    ) -> None:
+        """A dangling symlink at tokens.json raises ``OAuthError``.
+
+        Regression for the ``Path.exists()`` follows-symlink trap:
+        without the new ``reject_if_symlink`` probe, a dangling symlink
+        would surface as ``OAuthError("No OAuth tokens found... Run `mp
+        account login`")`` instead of the symlink-specific message, and
+        ``mp login`` would then try to write through the symlink.
+        """
+        account_dir = isolated_home / ".mp" / "accounts" / "personal"
+        account_dir.mkdir(parents=True, mode=0o700)
+        (account_dir / "tokens.json").symlink_to(isolated_home / "missing.json")
         resolver = OnDiskTokenResolver()
         with pytest.raises(OAuthError, match="symlink"):
             resolver.get_browser_token("personal", "us")

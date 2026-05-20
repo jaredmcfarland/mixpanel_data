@@ -10,6 +10,7 @@ Tests cover:
 
 from __future__ import annotations
 
+import os
 import stat
 import time
 from pathlib import Path
@@ -27,6 +28,11 @@ from mixpanel_headless._internal.me import (
     MeWorkspaceInfo,
 )
 from mixpanel_headless.exceptions import AuthenticationError, ConfigError, QueryError
+
+_REQUIRES_O_NOFOLLOW = pytest.mark.skipif(
+    not hasattr(os, "O_NOFOLLOW"),
+    reason="O_NOFOLLOW required; Windows is not in scope",
+)
 
 
 class TestMeOrgInfo:
@@ -688,10 +694,7 @@ class TestMeCacheSymlinkRejection:
     cache, ignoring" log line.
     """
 
-    @pytest.mark.skipif(
-        not hasattr(__import__("os"), "O_NOFOLLOW"),
-        reason="O_NOFOLLOW required; Windows is not in scope",
-    )
+    @_REQUIRES_O_NOFOLLOW
     def test_symlinked_cache_returns_none_and_warns(
         self,
         tmp_path: Path,
@@ -709,6 +712,32 @@ class TestMeCacheSymlinkRejection:
         attacker.write_text(json.dumps({"cached_at": 0}), encoding="utf-8")
         attacker.chmod(0o600)
         (account_dir / "me.json").symlink_to(attacker)
+
+        cache = MeCache(account_name="personal")
+        caplog.set_level(logging.WARNING)
+        assert cache.get() is None
+        assert any(
+            "symlink" in rec.message.lower() or "refusing" in rec.message.lower()
+            for rec in caplog.records
+        ), f"expected WARNING log mentioning symlink/refusing, got: {caplog.text}"
+
+    @_REQUIRES_O_NOFOLLOW
+    def test_dangling_symlink_cache_returns_none_and_warns(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """A dangling symlink at me.json is refused with WARNING log.
+
+        Regression for the ``Path.exists()`` follows-symlink trap.
+        """
+        import logging
+
+        monkeypatch.setenv("HOME", str(tmp_path))
+        account_dir = tmp_path / ".mp" / "accounts" / "personal"
+        account_dir.mkdir(parents=True, mode=0o700)
+        (account_dir / "me.json").symlink_to(tmp_path / "missing.json")
 
         cache = MeCache(account_name="personal")
         caplog.set_level(logging.WARNING)

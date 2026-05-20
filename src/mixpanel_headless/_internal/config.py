@@ -46,6 +46,7 @@ from mixpanel_headless._internal.auth.session import ActiveSession
 from mixpanel_headless._internal.io_utils import (
     atomic_write_bytes,
     read_credential_text,
+    reject_if_symlink,
 )
 from mixpanel_headless.exceptions import (
     AccountInUseError,
@@ -172,6 +173,14 @@ class ConfigManager:
                 expected to delete the file and re-add via ``mp account
                 add``.
         """
+        # Probe for symlink BEFORE the existence check — Path.exists()
+        # follows symlinks and silently returns False for dangling links,
+        # hiding the attack signal. CredentialPathError surfaces as
+        # ConfigError below via the existing OSError catch.
+        try:
+            reject_if_symlink(self._path)
+        except OSError as exc:
+            raise ConfigError(f"Could not parse config at {self._path}: {exc}") from exc
         if not self._path.exists():
             return {}
         try:

@@ -49,6 +49,7 @@ Verifies (stdin):
 
 from __future__ import annotations
 
+import contextlib
 import io
 import os
 import platform
@@ -61,12 +62,14 @@ import psutil
 import pytest
 
 from mixpanel_headless._internal.io_utils import (
+    MAX_CREDENTIAL_BYTES,
     SECRET_STDIN_MAX_BYTES,
     CredentialPathError,
     atomic_write_bytes,
     read_capped_secret_from_stdin,
     read_credential_bytes,
     read_credential_text,
+    reject_if_symlink,
 )
 from mixpanel_headless.exceptions import ConfigError
 
@@ -496,6 +499,259 @@ class TestReadCredentialText:
         link.symlink_to(target)
         with pytest.raises(CredentialPathError, match="symlink"):
             read_credential_text(link)
+
+
+class TestRejectIfSymlink:
+    """Tests for :func:`reject_if_symlink` — pre-read symlink probe."""
+
+    @_POSIX_ONLY
+    def test_live_symlink_raises(self, temp_dir: Path) -> None:
+        """A symlink at the path (whose target exists) raises ``CredentialPathError``."""
+        target = _write_owner_only(temp_dir / "real.json", b"x")
+        link = temp_dir / "creds.json"
+        link.symlink_to(target)
+        with pytest.raises(CredentialPathError, match="symlink"):
+            reject_if_symlink(link)
+
+    @_POSIX_ONLY
+    def test_dangling_symlink_raises(self, temp_dir: Path) -> None:
+        """A symlink whose target doesn't exist still raises.
+
+        This is the whole point of the helper: ``Path.exists()`` follows
+        symlinks and returns False for dangling links, hiding the attack
+        signal at every call site that short-circuits on ``not exists()``.
+        ``reject_if_symlink`` uses ``lstat`` so the symlink shape is
+        detected even when the target is gone.
+        """
+        link = temp_dir / "creds.json"
+        link.symlink_to(temp_dir / "missing.json")
+        with pytest.raises(CredentialPathError, match="symlink"):
+            reject_if_symlink(link)
+
+    def test_regular_file_is_noop(self, temp_dir: Path) -> None:
+        """A normal file path returns silently — no exception."""
+        target = _write_owner_only(temp_dir / "creds.json", b"x")
+        reject_if_symlink(target)  # no raise
+
+    def test_missing_path_is_noop(self, temp_dir: Path) -> None:
+        """A path that doesn't exist at all returns silently.
+
+        The helper's job is "reject symlinks", not "assert existence".
+        Existence is the caller's concern (each call site already has its
+        own ``not path.exists()`` check that handles the missing case).
+        """
+        reject_if_symlink(temp_dir / "nothing-here.json")  # no raise
+
+
+class TestOpenCredentialFdFlags:
+    """Lock the flag set on the fd returned by ``read_credential_bytes``.
+
+    These tests verify the defensive flag invariants without exposing
+    the private ``_open_credential_fd`` helper directly — they hook into
+    ``os.close`` to inspect the fd before the helper releases it.
+    """
+
+    @_POSIX_ONLY
+    def test_returned_fd_has_cloexec(self, temp_dir: Path) -> None:
+        """The credential fd has the FD_CLOEXEC bit set.
+
+        Without ``O_CLOEXEC``, any subprocess spawned while the fd is
+        open (logging handlers, signal-driven forks) inherits a live
+        handle to the credential file. The window is small but real.
+        """
+        import fcntl
+
+        target = _write_owner_only(temp_dir / "creds", b"x")
+        captured_flags: list[int] = []
+        real_close = os.close
+
+        def spy_close(fd: int) -> None:
+            # Inspect the descriptor BEFORE close — fcntl(F_GETFD) returns
+            # the cloexec flag set on the fd.
+            with contextlib.suppress(OSError):
+                captured_flags.append(fcntl.fcntl(fd, fcntl.F_GETFD))
+            real_close(fd)
+
+        with patch("mixpanel_headless._internal.io_utils.os.close", spy_close):
+            read_credential_bytes(target)
+        # The last close we see corresponds to the credential fd. Any
+        # intermediate dirfd opens (#3) also get FD_CLOEXEC, so every
+        # captured flag must include the bit.
+        assert captured_flags, "expected at least one close call"
+        for flags in captured_flags:
+            assert flags & fcntl.FD_CLOEXEC, (
+                f"credential fd lacks FD_CLOEXEC: flags={flags}"
+            )
+
+
+class TestNonRegularFileRejection:
+    """Reject FIFOs, devices, and other non-regular files at the credential path.
+
+    Same-UID attacker can ``mkfifo`` the credential path. Without
+    ``O_NONBLOCK`` the open blocks indefinitely; without an ``S_ISREG``
+    check the open eventually succeeds (with a writer attached) and we
+    read attacker-streamed bytes.
+    """
+
+    @_POSIX_ONLY
+    def test_rejects_fifo(self, temp_dir: Path) -> None:
+        """A FIFO at the credential path raises ``CredentialPathError``
+        without hanging the test process.
+        """
+        fifo = temp_dir / "creds.json"
+        os.mkfifo(fifo, 0o600)
+        # ``pytest-timeout`` isn't a dep — rely on the implementation's
+        # ``O_NONBLOCK`` to keep the call from blocking. If it blocks
+        # forever this test hangs the suite, which is itself a signal.
+        with pytest.raises(CredentialPathError, match="regular file|FIFO|pipe"):
+            read_credential_bytes(fifo)
+
+    @_POSIX_ONLY
+    def test_rejects_chardev_via_mock(self, temp_dir: Path) -> None:
+        """A character device at the credential path is rejected.
+
+        Constructing a real chardev needs root (``mknod``), so we patch
+        ``os.fstat`` to return a chardev mode while reading a real
+        regular file under the hood. The mode-check branch is what we're
+        exercising.
+        """
+        target = _write_owner_only(temp_dir / "creds", b"x")
+        real_fstat = os.fstat
+
+        def fake_fstat(fd: int) -> os.stat_result:
+            real = real_fstat(fd)
+            # Replace the file-type bits with S_IFCHR while keeping mode + size.
+            new_mode = (real.st_mode & ~0o170000) | stat.S_IFCHR
+            return os.stat_result(
+                (
+                    new_mode,
+                    real.st_ino,
+                    real.st_dev,
+                    real.st_nlink,
+                    real.st_uid,
+                    real.st_gid,
+                    real.st_size,
+                    real.st_atime,
+                    real.st_mtime,
+                    real.st_ctime,
+                )
+            )
+
+        with (
+            patch("mixpanel_headless._internal.io_utils.os.fstat", fake_fstat),
+            pytest.raises(CredentialPathError, match="regular file"),
+        ):
+            read_credential_bytes(target)
+
+
+class TestSizeCap:
+    """Reject credential files larger than ``MAX_CREDENTIAL_BYTES`` (1 MiB)."""
+
+    @_POSIX_ONLY
+    def test_accepts_at_cap(self, temp_dir: Path) -> None:
+        """A file exactly at the cap reads cleanly."""
+        target = _write_owner_only(temp_dir / "creds", b"A" * MAX_CREDENTIAL_BYTES)
+        assert len(read_credential_bytes(target)) == MAX_CREDENTIAL_BYTES
+
+    @_POSIX_ONLY
+    def test_rejects_over_cap(self, temp_dir: Path) -> None:
+        """One byte over the cap raises ``CredentialPathError(EFBIG, ...)``."""
+        target = _write_owner_only(
+            temp_dir / "creds", b"A" * (MAX_CREDENTIAL_BYTES + 1)
+        )
+        with pytest.raises(CredentialPathError, match="size|too large|EFBIG|cap"):
+            read_credential_bytes(target)
+
+    def test_cap_is_sane_value(self) -> None:
+        """1 MiB is documented as 100× the largest realistic credential file.
+
+        Locks the constant against accidental changes that would break
+        the size-rejection contract.
+        """
+        assert MAX_CREDENTIAL_BYTES == 1 << 20
+
+
+class TestDirfdWalk:
+    """Intermediate-component symlink rejection (the dirfd-walked open).
+
+    The original PR only checked the FINAL path component for symlinks.
+    A same-UID attacker who can ``rm -rf ~/.mp && ln -s /tmp/attack ~/.mp``
+    bypasses leaf-only ``O_NOFOLLOW`` entirely. The dirfd walk closes
+    the gap for paths under :func:`Path.home` (where attackers can
+    actually plant symlinks). Tests monkeypatch ``HOME`` to a tmp dir
+    so the walk fires on the test path.
+    """
+
+    @_POSIX_ONLY
+    def test_rejects_symlinked_ancestor(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A symlink in any intermediate path component raises ``CredentialPathError``.
+
+        Layout::
+
+            $HOME/real_dir/creds.json  (real file, 0o600)
+            $HOME/link_dir -> real_dir (symlink at the intermediate component)
+
+        Read via ``$HOME/link_dir/creds.json``. The leaf is a real
+        file, but ``link_dir`` is a symlink. Must reject.
+        """
+        monkeypatch.setenv("HOME", str(tmp_path))
+        real_dir = tmp_path / "real_dir"
+        real_dir.mkdir(mode=0o700)
+        _write_owner_only(real_dir / "creds.json", b"x")
+        link_dir = tmp_path / "link_dir"
+        link_dir.symlink_to(real_dir, target_is_directory=True)
+        with pytest.raises(CredentialPathError, match="symlink"):
+            read_credential_bytes(link_dir / "creds.json")
+
+    @_POSIX_ONLY
+    def test_accepts_real_ancestors(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A path with no symlinks anywhere under HOME reads fine."""
+        monkeypatch.setenv("HOME", str(tmp_path))
+        nested = tmp_path / "a" / "b" / "c"
+        nested.mkdir(parents=True, mode=0o700)
+        target = _write_owner_only(nested / "creds", b"deep")
+        assert read_credential_bytes(target) == b"deep"
+
+    @_POSIX_ONLY
+    def test_no_fd_leak_on_ancestor_rejection(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Repeated dirfd-walk rejections don't accumulate fds."""
+        monkeypatch.setenv("HOME", str(tmp_path))
+        real_dir = tmp_path / "real_dir"
+        real_dir.mkdir(mode=0o700)
+        _write_owner_only(real_dir / "creds.json", b"x")
+        link_dir = tmp_path / "link_dir"
+        link_dir.symlink_to(real_dir, target_is_directory=True)
+        proc = psutil.Process()
+        before = proc.num_fds()
+        for _ in range(200):
+            with pytest.raises(CredentialPathError):
+                read_credential_bytes(link_dir / "creds.json")
+        after = proc.num_fds()
+        assert after - before < 5, f"fd leak in dirfd walk: {before} -> {after}"
+
+    @_POSIX_ONLY
+    def test_outside_home_uses_leaf_only(self, tmp_path: Path) -> None:
+        """Paths outside HOME get leaf-only protection (no dirfd walk).
+
+        An intermediate symlink outside HOME is NOT rejected (the user
+        configured the path explicitly via env var / direct path).
+        This locks the documented carve-out so future changes don't
+        accidentally tighten or loosen the contract.
+        """
+        # tmp_path is in /var/folders on macOS, definitely not under HOME.
+        real_dir = tmp_path / "real_dir"
+        real_dir.mkdir(mode=0o700)
+        _write_owner_only(real_dir / "creds.json", b"x")
+        link_dir = tmp_path / "link_dir"
+        link_dir.symlink_to(real_dir, target_is_directory=True)
+        # Leaf is a real file → succeeds (no intermediate-symlink check).
+        assert read_credential_bytes(link_dir / "creds.json") == b"x"
 
 
 def _stub_stdin(monkeypatch: pytest.MonkeyPatch, payload: bytes) -> None:

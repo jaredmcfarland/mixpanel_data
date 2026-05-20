@@ -237,3 +237,64 @@ class TestOAuthStorageSymlinkRejection:
         storage._check_and_fix_permissions(target)
         # Target file mode unchanged — no chmod side effect via the symlink.
         assert stat.S_IMODE(attacker.stat().st_mode) == original_mode
+
+    @pytest.mark.skipif(
+        platform.system() == "Windows",
+        reason="POSIX symlink + mode semantics required",
+    )
+    def test_dangling_symlink_returns_none_and_warns(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """Dangling symlink at the credential path is refused with WARNING."""
+        import logging
+
+        from mixpanel_headless._internal.auth.storage import OAuthStorage
+
+        monkeypatch.setenv("MP_OAUTH_STORAGE_DIR", str(tmp_path))
+        storage = OAuthStorage()
+        storage._ensure_dir()
+        target = storage._tokens_path("us")
+        target.symlink_to(tmp_path / "missing.json")
+
+        caplog.set_level(logging.WARNING)
+        result = storage.load_tokens("us")
+        assert result is None
+        assert any(
+            "symlink" in rec.message.lower() or "refusing" in rec.message.lower()
+            for rec in caplog.records
+        ), f"expected WARNING log mentioning symlink/refusing, got: {caplog.text}"
+
+    @pytest.mark.skipif(
+        platform.system() == "Windows",
+        reason="POSIX symlink + mode semantics required",
+    )
+    def test_check_and_fix_permissions_uses_fchmod_not_chmod(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The chmod-through-symlink TOCTOU is closed via open+fchmod.
+
+        Confirm by patching ``Path.chmod`` to fail loudly — if the code
+        still reaches it, the test fails. The fchmod-on-fd path doesn't
+        go through ``Path.chmod``.
+        """
+        from unittest.mock import patch
+
+        from mixpanel_headless._internal.auth.storage import OAuthStorage
+
+        monkeypatch.setenv("MP_OAUTH_STORAGE_DIR", str(tmp_path))
+        storage = OAuthStorage()
+        storage._ensure_dir()
+        target = storage._tokens_path("us")
+        target.write_text("{}", encoding="utf-8")
+        target.chmod(0o644)  # set up lax mode to trigger the repair path
+
+        with patch.object(
+            Path, "chmod", side_effect=AssertionError("Path.chmod called!")
+        ):
+            # _check_and_fix_permissions must NOT call Path.chmod anywhere.
+            storage._check_and_fix_permissions(target)
+        # Verify the file was actually chmodded via the fchmod path.
+        assert stat.S_IMODE(target.stat().st_mode) == 0o600
