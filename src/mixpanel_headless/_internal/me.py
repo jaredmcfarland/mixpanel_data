@@ -301,7 +301,11 @@ class MeCache:
             raw = path.read_text(encoding="utf-8")
             data: dict[str, Any] = json.loads(raw)
         except (json.JSONDecodeError, OSError) as e:
-            logger.debug("Corrupted cache file %s: %s", path, e)
+            logger.debug(
+                "Corrupted cache file %s: %s",
+                path,  # lgtm[py/clear-text-logging-sensitive-data]
+                e,
+            )
             return None
 
         # Check TTL
@@ -326,7 +330,7 @@ class MeCache:
             logger.warning(
                 "Cached /me response at %s no longer matches the model "
                 "(schema drift). Invalidating: %s",
-                path,
+                path,  # lgtm[py/clear-text-logging-sensitive-data]
                 e,
             )
             path.unlink(missing_ok=True)
