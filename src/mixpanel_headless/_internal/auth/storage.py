@@ -242,6 +242,13 @@ class OAuthStorage:
         Args:
             path: File path whose permissions (and parent directory) to check.
         """
+        # Check if storage directory is a symlink
+        if self._storage_dir.is_symlink():
+            logger.warning(
+                "Cannot follow symlinks to repair permissions on the storage directory."
+            )
+            return
+
         # Check directory permissions
         if self._storage_dir.exists():
             dir_mode = stat.S_IMODE(self._storage_dir.stat().st_mode)
@@ -250,12 +257,9 @@ class OAuthStorage:
                     self._storage_dir.chmod(stat.S_IRWXU)
                 except OSError:
                     logger.warning(
-                        "Cannot repair directory permissions on %s. "
-                        "Expected 0o700, got %s. "
-                        "Run: chmod 700 %s",
-                        self._storage_dir,
+                        "Cannot repair storage directory permissions. "
+                        "Expected 0o700, got %s.",
                         oct(dir_mode),
-                        self._storage_dir,
                     )
 
         # Check file permissions
@@ -266,12 +270,9 @@ class OAuthStorage:
                     path.chmod(stat.S_IRUSR | stat.S_IWUSR)
                 except OSError:
                     logger.warning(
-                        "Cannot repair file permissions on %s. "
-                        "Expected 0o600, got %s. "
-                        "Run: chmod 600 %s",
-                        path,
+                        "Cannot repair file permissions on %s. Expected 0o600, got %s.",
+                        path.name,
                         oct(file_mode),
-                        path,
                     )
 
     def _write_file(self, path: Path, data: dict[str, Any]) -> None:
@@ -310,12 +311,14 @@ class OAuthStorage:
             content = path.read_text(encoding="utf-8")
             parsed = json.loads(content)
         except (json.JSONDecodeError, ValueError, UnicodeDecodeError):
-            logger.warning("Corrupted or invalid JSON in %s — ignoring file.", path)
+            logger.warning(
+                "Corrupted or invalid JSON in %s — ignoring file.", path.name
+            )
             return None
         if not isinstance(parsed, dict):
             logger.warning(
                 "Expected JSON object in %s, got %s — ignoring file.",
-                path,
+                path.name,
                 type(parsed).__name__,
             )
             return None
@@ -412,8 +415,8 @@ class OAuthStorage:
             )
         except (KeyError, TypeError, ValueError) as exc:
             logger.warning(
-                "Failed to parse tokens from %s: %s — ignoring file.",
-                self._tokens_path(region),
+                "Failed to parse tokens from tokens_%s.json: %s — ignoring file.",
+                region,
                 exc,
             )
             return None
@@ -461,8 +464,8 @@ class OAuthStorage:
             return OAuthClientInfo.model_validate(data)
         except (KeyError, TypeError, ValueError) as exc:
             logger.warning(
-                "Failed to parse client info from %s: %s — ignoring file.",
-                self._client_path(region),
+                "Failed to parse client info from client_%s.json: %s — ignoring file.",
+                region,
                 exc,
             )
             return None
