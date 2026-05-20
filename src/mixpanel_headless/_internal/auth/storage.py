@@ -242,15 +242,12 @@ class OAuthStorage:
         Args:
             path: File path whose permissions (and parent directory) to check.
         """
-        # Check if storage directory is a symlink
+        # Check directory permissions (skip if directory is a symlink)
         if self._storage_dir.is_symlink():
             logger.warning(
                 "Cannot follow symlinks to repair permissions on the storage directory."
             )
-            return
-
-        # Check directory permissions
-        if self._storage_dir.exists():
+        elif self._storage_dir.exists():
             dir_mode = stat.S_IMODE(self._storage_dir.stat().st_mode)
             if dir_mode != 0o700:
                 try:
@@ -262,7 +259,7 @@ class OAuthStorage:
                         oct(dir_mode),
                     )
 
-        # Check file permissions
+        # Check file permissions (always check, even if directory is a symlink)
         if path.exists():
             file_mode = stat.S_IMODE(path.stat().st_mode)
             if file_mode != 0o600:
