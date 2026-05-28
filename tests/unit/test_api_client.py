@@ -1248,6 +1248,28 @@ class TestErrorHandling:
 
         assert "Bad request: missing required field" in str(exc_info.value)
 
+    def test_query_error_on_412_preserves_body(self, test_credentials: Session) -> None:
+        """A 412 (or other unhandled 4xx) maps to QueryError with body preserved.
+
+        Regression: removing the JQL-specific 412 branch must not let 4xx
+        responses fall through to a generic HTTP error that drops status code
+        and response body.
+        """
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(412, json={"error": "Precondition failed"})
+
+        with (
+            create_mock_client(test_credentials, handler) as client,
+            pytest.raises(QueryError) as exc_info,
+        ):
+            client.get_events()
+
+        exc = exc_info.value
+        assert exc.status_code == 412
+        assert "Precondition failed" in str(exc)
+        assert exc.response_body == {"error": "Precondition failed"}
+
 
 class TestServerErrors:
     """Test 5xx server error handling."""

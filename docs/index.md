@@ -213,8 +213,7 @@ mp query segmentation "Purchase" --from 2025-01-01 --format json --jq '.total'
 - List all events, drill into properties, sample actual values
 - Browse saved funnels, cohorts, and reports (bookmarks)
 - Access Lexicon definitions from your data dictionary
-- Analyze property distributions, coverage, and numeric statistics
-- Inspect top events by volume, daily trends, user engagement patterns
+- Inspect top events by volume
 
 Discovery commands let you survey what exists before writing queries—no guessing at event names or property values.
 

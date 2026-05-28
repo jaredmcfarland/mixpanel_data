@@ -224,11 +224,6 @@ See [Auth → Workspace.use()](auth.md#workspaceuse-in-session-switching) for th
         - segmentation_numeric
         - segmentation_sum
         - segmentation_average
-        - property_distribution
-        - numeric_summary
-        - daily_counts
-        - engagement_distribution
-        - property_coverage
         - api
         # Dashboard CRUD
         - list_dashboards

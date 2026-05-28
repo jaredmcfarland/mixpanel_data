@@ -320,6 +320,7 @@ class MixpanelAPIClient:
             - 401: AuthenticationError (invalid credentials)
             - 403: QueryError (permission denied)
             - 404: QueryError (resource not found)
+            - 4xx (other): QueryError with status code and response body
             - 5xx: ServerError with status code and error details
 
         Note: 429 (rate limit) is handled separately in _request() with retry logic.
@@ -391,6 +392,24 @@ class MixpanelAPIClient:
                 error_msg = response_body.get("error", "Resource not found")
             elif isinstance(response_body, str):
                 error_msg = response_body[:200] or "Resource not found"
+            raise QueryError(
+                error_msg,
+                status_code=response.status_code,
+                response_body=response_body,
+                request_method=request_method,
+                request_url=request_url,
+                request_params=request_params,
+                request_body=request_body,
+            )
+        if 400 <= response.status_code < 500:
+            # Any other 4xx (e.g., 412 Precondition Failed) — preserve the
+            # response body and status as a QueryError instead of letting it
+            # fall through to a generic HTTP error in _execute_with_retry().
+            error_msg = "Request failed"
+            if isinstance(response_body, dict):
+                error_msg = response_body.get("error", "Request failed")
+            elif isinstance(response_body, str):
+                error_msg = response_body[:200] or "Request failed"
             raise QueryError(
                 error_msg,
                 status_code=response.status_code,
