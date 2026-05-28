@@ -215,7 +215,6 @@ See [Auth → Workspace.use()](auth.md#workspaceuse-in-session-switching) for th
         - segmentation
         - funnel
         - retention
-        - jql
         - event_counts
         - property_counts
         - activity_feed
