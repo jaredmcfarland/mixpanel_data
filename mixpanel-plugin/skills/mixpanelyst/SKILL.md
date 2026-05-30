@@ -1,6 +1,6 @@
 ---
 name: mixpanelyst
-description: This skill should be used when the user asks about Mixpanel product analytics, event data, funnel analysis, retention curves, cohort analysis, segmentation queries, user behavior, conversion rates, churn, DAU/MAU, ARPU, revenue metrics, feature adoption, A/B test results, user paths, flow analysis, or any request to query, explore, visualize, or analyze Mixpanel data using Python. Also use when the user asks to read, write, or manage Mixpanel "business context" — the markdown documentation that grounds AI assistants in an organization's structure and goals.
+description: "Build segmentation queries, generate retention curves, create funnel reports, analyze user flows, explore cohort behavior, and manage entity CRUD operations via the Mixpanel API using Python. Use when the user asks about Mixpanel product analytics, event data, funnel analysis, retention curves, cohort analysis, segmentation queries, user behavior, conversion rates, churn, DAU/MAU, ARPU, revenue metrics, feature adoption, A/B test results, user paths, flow analysis, or any request involving Mixpanel data using the mixpanel_headless library. Also use when the user asks to read, write, or manage Mixpanel business context — the markdown documentation that grounds AI assistants in an organization's structure and goals. Do not use for general analytics questions unrelated to Mixpanel or its API."
 allowed-tools: Bash Read Write WebFetch
 ---
 
@@ -198,59 +198,13 @@ When string properties have complex/unreadable values (e.g., campaign names from
 
 ### Custom Property Formula Reference
 
-Formulas use a SQL-like expression language. Variables (A, B, _A, etc.) map to properties via `composedProperties`.
-
-**Variable binding:** `LET(name, expression, body)` — define intermediate results:
-```
-LET(raw, A, REGEX_REPLACE(raw, "pattern", "replacement"))
-LET(x, A * B, IFS(x < 50, "low", x < 200, "mid", TRUE, "high"))
-```
-
-**Conditionals:** `IF(cond, then, else)`, `IFS(cond1, val1, cond2, val2, ..., TRUE, default)`
-
-**String functions:** `UPPER(s)`, `LOWER(s)`, `LEN(s)`, `LEFT(s, n)`, `RIGHT(s, n)`, `MID(s, start, count)`, `SPLIT(s, delim, n)`, `HAS_PREFIX(s, p)`, `HAS_SUFFIX(s, p)`, `PARSE_URL(s, "domain")`
-
-**Regex functions (PCRE2 engine):**
-- `REGEX_MATCH(haystack, pattern)` — returns true/false
-- `REGEX_EXTRACT(haystack, pattern, capture_group)` — returns match or capture group
-- `REGEX_REPLACE(haystack, pattern, replacement)` — replaces all matches
+Formulas use a SQL-like expression language with `LET`, `IF`/`IFS`, string/regex/math/date/list functions, and `DEFINED()` for null checks. See `references/custom-property-formulas.md` for the complete function reference with examples.
 
 **Regex engine quirks (Mixpanel-specific):**
-- **Case-insensitive by default** — use `(?-i)` to switch to case-sensitive matching within a pattern
-- **Backreferences work** — `$1`, `$2` capture groups and `$0` whole-match all work in `REGEX_REPLACE` replacements
-- **`{n,m}` quantifiers conflict with formula syntax** — curly braces are parsed as formula constructs. Use repeated character classes instead (e.g., `[0-9][0-9][0-9][0-9]` instead of `[0-9]{4}`)
+- **Case-insensitive by default** — use `(?-i)` to switch to case-sensitive
+- **`{n,m}` quantifiers conflict with formula syntax** — use repeated character classes (e.g., `[0-9][0-9][0-9][0-9]` instead of `[0-9]{4}`)
 - **`\d`, `\w` shorthand classes don't work** — use `[0-9]`, `[A-Za-z0-9_]` explicitly
-- **Escape backslashes carefully** — in formula strings, `\\\\` may be needed for a literal `\` depending on how the formula is constructed (Python string → JSON → regex engine)
-
-**CamelCase splitting** — insert space between lowercase→uppercase boundaries:
-```
-REGEX_REPLACE(text, "(?-i)([a-z])([A-Z])", "$1 $2")
-// ChickenSundaysApril → Chicken Sundays April
-```
-
-**Practical multi-step cleanup example** (campaign names from Braze):
-```
-LET(s1, REGEX_REPLACE(A, "^[0-9][0-9][0-9][0-9][0-9]*_", ""),
-LET(s2, REGEX_REPLACE(s1, "^(NW|TARGETED|REGIONAL|NTL)_", ""),
-LET(s3, REGEX_REPLACE(s2, "_(Push|Email|NotificationCenter|ModalInAppMessage)_.*$", ""),
-LET(s4, REGEX_REPLACE(s3, "_", " "),
-  REGEX_REPLACE(s4, " +", " ")
-))))
-```
-
-**Type functions:** `STRING(x)`, `NUMBER(x)`, `BOOLEAN(x)`, `DEFINED(x)`
-
-**Math:** `+`, `-`, `*`, `/`, `%`, `MIN(a,b)`, `MAX(a,b)`, `FLOOR(n)`, `CEIL(n)`, `ROUND(n)`
-
-**Date:** `DATEDIF(start, end, unit)` — units: D, M, Y, MD, YM, YD. `TODAY()` for current date.
-
-**List:** `SUM(list)`, `ANY(x, list, expr)`, `ALL(x, list, expr)`, `FILTER(x, list, expr)`, `MAP(x, list, expr)`
-
-**Comparison:** `==`, `!=`, `<`, `>`, `<=`, `>=` (case-insensitive for strings), `IN` for list membership
-
-**Logical:** `AND`, `OR`, `NOT(x)`
-
-**Constants:** `TRUE`, `FALSE`, `UNDEFINED`
+- **Backreferences work** — `$1`, `$2` in `REGEX_REPLACE` replacements
 
 **Creating a custom property via the API:**
 ```python
@@ -840,87 +794,13 @@ result = ws.query_flow("Login", forward=3,
 
 ### Legacy Queries & Counts
 
-These use older APIs. Prefer the typed query methods above when possible.
-
-```python
-def segmentation(self, event: str, *, from_date: str, to_date: str, on: str | None = None, unit: Literal['day', 'week', 'month'] = 'day', where: str | None = None) -> SegmentationResult: ...
-def funnel(self, funnel_id: int, *, from_date: str, to_date: str, unit: str | None = None, on: str | None = None) -> FunnelResult: ...
-def retention(self, *, born_event: str, return_event: str, from_date: str, to_date: str, born_where: str | None = None, return_where: str | None = None, interval: int = 1, interval_count: int = 10, unit: Literal['day', 'week', 'month'] = 'day') -> RetentionResult: ...
-def event_counts(self, events: list[str], *, from_date: str, to_date: str, type: Literal['general', 'unique', 'average'] = 'general', unit: Literal['day', 'week', 'month'] = 'day') -> EventCountsResult: ...
-def property_counts(self, event: str, property_name: str, *, from_date: str, to_date: str, type: Literal['general', 'unique', 'average'] = 'general', unit: Literal['day', 'week', 'month'] = 'day', values: list[str] | None = None, limit: int | None = None) -> PropertyCountsResult: ...
-def frequency(self, *, from_date: str, to_date: str, unit: Literal['day', 'week', 'month'] = 'day', addiction_unit: Literal['hour', 'day'] = 'hour', event: str | None = None, where: str | None = None) -> FrequencyResult: ...
-def activity_feed(self, distinct_ids: list[str], *, from_date: str | None = None, to_date: str | None = None) -> ActivityFeedResult: ...
-def query_saved_report(self, bookmark_id: int, *, bookmark_type: Literal['insights', 'funnels', 'retention', 'flows'] = 'insights', from_date: str | None = None, to_date: str | None = None) -> SavedReportResult: ...
-def query_saved_flows(self, bookmark_id: int) -> FlowsResult: ...
-def segmentation_numeric(self, event: str, *, from_date: str, to_date: str, on: str, unit: Literal['hour', 'day'] = 'day', where: str | None = None, type: Literal['general', 'unique', 'average'] = 'general') -> NumericBucketResult: ...
-def segmentation_sum(self, event: str, *, from_date: str, to_date: str, on: str, unit: Literal['hour', 'day'] = 'day', where: str | None = None) -> NumericSumResult: ...
-def segmentation_average(self, event: str, *, from_date: str, to_date: str, on: str, unit: Literal['hour', 'day'] = 'day', where: str | None = None) -> NumericAverageResult: ...
-```
+Older API wrappers (`segmentation`, `funnel`, `retention`, `event_counts`, `property_counts`, `frequency`, `activity_feed`, `query_saved_report`, `query_saved_flows`). Prefer the typed query methods above. See `references/entity-crud-reference.md` for full signatures.
 
 ### Entity CRUD (App API)
 
-All entity methods require a workspace ID. Use `python3 ${CLAUDE_SKILL_DIR}/scripts/help.py Workspace.<method>` for full signatures and parameter types.
-User Guide: `WebFetch(url="https://mixpanel.github.io/mixpanel-headless/guide/entity-management/index.md")`
+All entity methods require a workspace ID. Covers dashboards, bookmarks, cohorts, feature flags, experiments, alerts, annotations, webhooks, Lexicon (event/property definitions, tags, drop filters, custom properties/events, lookup tables, schema registry/enforcement), audit, and data deletion. Use `python3 ${CLAUDE_SKILL_DIR}/scripts/help.py Workspace.<method>` for full signatures.
 
-#### Dashboard (→ `Dashboard`)
-
-`list_dashboards`, `create_dashboard`, `get_dashboard`, `update_dashboard`, `delete_dashboard`, `bulk_delete_dashboards`, `favorite_dashboard`, `unfavorite_dashboard`, `pin_dashboard`, `unpin_dashboard`, `add_report_to_dashboard`, `remove_report_from_dashboard`, `update_text_card`, `update_report_link`
-
-**Blueprints:** `list_blueprint_templates` → `list[BlueprintTemplate]`, `create_blueprint`, `get_blueprint_config`, `update_blueprint_cohorts`, `finalize_blueprint`, `create_rca_dashboard`
-
-**Helpers:** `get_bookmark_dashboard_ids` → `list[int]`, `get_dashboard_erf` → `dict`
-
-#### Bookmark / Report (→ `Bookmark`)
-
-`list_bookmarks_v2`, `create_bookmark`, `get_bookmark`, `update_bookmark`, `delete_bookmark`, `bulk_delete_bookmarks`, `bulk_update_bookmarks`, `bookmark_linked_dashboard_ids` → `list[int]`, `get_bookmark_history` → `BookmarkHistoryResponse`
-
-#### Cohort (→ `Cohort`)
-
-`list_cohorts_full`, `get_cohort`, `create_cohort`, `update_cohort`, `delete_cohort`, `bulk_delete_cohorts`, `bulk_update_cohorts`
-
-#### Feature Flag (→ `FeatureFlag`)
-
-`list_feature_flags`, `create_feature_flag`, `get_feature_flag`, `update_feature_flag`, `delete_feature_flag`, `archive_feature_flag`, `restore_feature_flag`, `duplicate_feature_flag`, `set_flag_test_users`, `get_flag_history` → `FlagHistoryResponse`, `get_flag_limits` → `FlagLimitsResponse`
-
-#### Experiment (→ `Experiment`)
-
-`list_experiments`, `create_experiment`, `get_experiment`, `update_experiment`, `delete_experiment`, `launch_experiment`, `conclude_experiment`, `decide_experiment`, `archive_experiment`, `restore_experiment`, `duplicate_experiment`, `list_erf_experiments` → `list[dict]`
-
-#### Alert (→ `CustomAlert`)
-
-`list_alerts`, `create_alert`, `get_alert`, `update_alert`, `delete_alert`, `bulk_delete_alerts`, `get_alert_count` → `AlertCount`, `get_alert_history` → `AlertHistoryResponse`, `test_alert`, `get_alert_screenshot_url`, `validate_alerts_for_bookmark`
-
-#### Annotation (→ `Annotation`)
-
-`list_annotations`, `create_annotation`, `get_annotation`, `update_annotation`, `delete_annotation`, `list_annotation_tags` → `list[AnnotationTag]`, `create_annotation_tag`
-
-#### Webhook (→ `ProjectWebhook`)
-
-`list_webhooks`, `create_webhook`, `update_webhook`, `delete_webhook`, `test_webhook`
-
-#### Lexicon & Data Governance
-
-**Event/Property Definitions:** `get_event_definitions`, `update_event_definition`, `delete_event_definition`, `bulk_update_event_definitions`, `get_property_definitions`, `update_property_definition`, `bulk_update_property_definitions`, `export_lexicon`, `get_event_history`, `get_property_history`
-
-**Tags:** `list_lexicon_tags`, `create_lexicon_tag`, `update_lexicon_tag`, `delete_lexicon_tag`
-
-**Drop Filters:** `list_drop_filters`, `create_drop_filter`, `update_drop_filter`, `delete_drop_filter`, `get_drop_filter_limits`
-
-**Custom Properties:** `list_custom_properties`, `create_custom_property`, `get_custom_property`, `update_custom_property`, `delete_custom_property`, `validate_custom_property`
-
-**Custom Events:** `list_custom_events`, `update_custom_event`, `delete_custom_event`
-
-**Lookup Tables:** `list_lookup_tables`, `upload_lookup_table`, `download_lookup_table`, `update_lookup_table`, `delete_lookup_tables`
-
-**Schema Registry:** `list_schema_registry`, `create_schema`, `update_schema`, `create_schemas_bulk`, `update_schemas_bulk`, `delete_schemas`
-
-**Schema Enforcement:** `get_schema_enforcement`, `init_schema_enforcement`, `update_schema_enforcement`, `replace_schema_enforcement`, `delete_schema_enforcement`
-
-**Audit & Monitoring:** `run_audit`, `run_audit_events_only`, `list_data_volume_anomalies`, `update_anomaly`, `bulk_update_anomalies`
-
-**Data Deletion:** `list_deletion_requests`, `create_deletion_request`, `cancel_deletion_request`, `preview_deletion_filters`
-
-**Other:** `get_tracking_metadata`
+See `references/entity-crud-reference.md` for the complete method listing by entity type.
 
 ### Business Context
 
@@ -1001,41 +881,11 @@ Full reference: `WebFetch(url="https://mixpanel.github.io/mixpanel-headless/api/
 
 ## Statistical Analysis — numpy, scipy
 
-All query results produce pandas DataFrames, which integrate directly with numpy and scipy:
-
-```python
-import numpy as np
-from scipy import stats
-
-# Compare two segments
-a = result.df[result.df["platform"] == "iOS"]["count"]
-b = result.df[result.df["platform"] == "Android"]["count"]
-t_stat, p_value = stats.ttest_ind(a, b)
-cohens_d = (a.mean() - b.mean()) / np.sqrt((a.std()**2 + b.std()**2) / 2)
-
-# Useful scipy.stats tests: ttest_ind, mannwhitneyu, chi2_contingency, pearsonr, spearmanr
-# Useful numpy: np.percentile, np.corrcoef, np.polyfit (trend lines)
-```
+All query results produce pandas DataFrames via `.df`, compatible with numpy and scipy for statistical tests (`ttest_ind`, `mannwhitneyu`, `chi2_contingency`, `pearsonr`) and trend analysis (`np.polyfit`).
 
 ## Visualization — matplotlib, seaborn
 
-Save charts to files for the user. Always use a non-interactive backend:
-
-```python
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-import seaborn as sns
-
-fig, ax = plt.subplots(figsize=(10, 5))
-result.df.plot(x="date", y="count", ax=ax)
-ax.set_title("Daily Logins")
-fig.savefig("chart.png", dpi=150, bbox_inches="tight")
-plt.close(fig)
-
-# seaborn: sns.lineplot, sns.barplot, sns.heatmap (for retention matrices)
-# Multi-panel: fig, axes = plt.subplots(2, 2) for dashboard-style layouts
-```
+Save charts to files. Always use `matplotlib.use("Agg")` before importing pyplot. Use `sns.heatmap` for retention matrices, `sns.barplot` for segment comparisons, and multi-panel layouts (`plt.subplots(2, 2)`) for dashboard-style views.
 
 ## Exceptions
 
